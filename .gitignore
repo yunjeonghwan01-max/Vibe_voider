@@ -1,0 +1,7 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# macOS Finder metadata
+.DS_Store
+addons/.DS_Store

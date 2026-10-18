@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://b6iyiseqvt13n"]
+
+[ext_resource type="Script" uid="uid://1v42i2u64m44" path="res://app/main.gd" id="1_dmym1"]
+[ext_resource type="PackedScene" uid="uid://ccec0fumldw1y" path="res://toolkit/toolkit.tscn" id="2_x6rnu"]
+
+[node name="Main" type="Node" unique_id=722765371]
+script = ExtResource("1_dmym1")
+
+[node name="Toolkit" parent="." unique_id=758752430 instance=ExtResource("2_x6rnu")]
