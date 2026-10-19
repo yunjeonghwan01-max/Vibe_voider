@@ -1,0 +1,88 @@
+[gd_scene load_steps=13 format=3 uid="uid://cplayervoider1"]
+
+[ext_resource type="Script" path="res://actors/player/player.gd" id="1_player"]
+[ext_resource type="Texture2D" uid="uid://cdb5faqq6v4dv" path="res://assets/characters/player/Voider Player01.png" id="2_tex"]
+[ext_resource type="Script" path="res://combat/components/health/health.gd" id="3_health"]
+[ext_resource type="Script" path="res://combat/components/hurtbox/hurtbox.gd" id="4_hurt"]
+[ext_resource type="Script" path="res://combat/components/hitbox/hitbox.gd" id="5_hit"]
+[ext_resource type="PackedScene" path="res://combat/effects/slash/slash.tscn" id="6_slash"]
+[ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="7_spark"]
+[ext_resource type="PackedScene" path="res://combat/effects/afterimage/afterimage.tscn" id="8_after"]
+
+[sub_resource type="CapsuleShape2D" id="Cap_body"]
+radius = 15.0
+height = 54.0
+
+[sub_resource type="CapsuleShape2D" id="Cap_hurt"]
+radius = 14.0
+height = 50.0
+
+[sub_resource type="CircleShape2D" id="Circ_attack"]
+radius = 30.0
+
+[sub_resource type="CircleShape2D" id="Circ_parry"]
+radius = 42.0
+
+[node name="Player" type="CharacterBody2D"]
+collision_layer = 2
+collision_mask = 1
+script = ExtResource("1_player")
+slash_scene = ExtResource("6_slash")
+spark_scene = ExtResource("7_spark")
+afterimage_scene = ExtResource("8_after")
+
+[node name="Visual" type="Node2D" parent="."]
+
+[node name="Sprite2D" type="Sprite2D" parent="Visual"]
+position = Vector2(0, -4)
+scale = Vector2(0.055, 0.055)
+texture = ExtResource("2_tex")
+
+[node name="BodyCollision" type="CollisionShape2D" parent="."]
+shape = SubResource("Cap_body")
+
+[node name="Trail" type="Line2D" parent="."]
+visible = false
+width = 11.0
+default_color = Color(0.72, 0.45, 1, 0.45)
+begin_cap_mode = 2
+end_cap_mode = 2
+joint_mode = 2
+
+[node name="Combat" type="Node2D" parent="."]
+
+[node name="Health" type="Node" parent="Combat"]
+script = ExtResource("3_health")
+max_hp = 100
+
+[node name="Hurtbox" type="Area2D" parent="Combat"]
+collision_layer = 8
+collision_mask = 0
+monitoring = false
+script = ExtResource("4_hurt")
+health = NodePath("../Health")
+invincibility_duration = 0.5
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/Hurtbox"]
+shape = SubResource("Cap_hurt")
+
+[node name="AttackHitbox" type="Area2D" parent="Combat"]
+position = Vector2(34, -8)
+collision_layer = 32
+collision_mask = 16
+monitoring = false
+script = ExtResource("5_hit")
+damage = 10
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/AttackHitbox"]
+shape = SubResource("Circ_attack")
+
+[node name="ParryBox" type="Area2D" parent="Combat"]
+position = Vector2(30, -8)
+collision_layer = 0
+collision_mask = 64
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/ParryBox"]
+shape = SubResource("Circ_parry")

@@ -1,0 +1,74 @@
+[gd_scene load_steps=10 format=3 uid="uid://cduelistvoid01"]
+
+[ext_resource type="Script" path="res://actors/enemies/duelist/duelist.gd" id="1_duel"]
+[ext_resource type="Script" path="res://combat/components/health/health.gd" id="2_health"]
+[ext_resource type="Script" path="res://combat/components/hurtbox/hurtbox.gd" id="3_hurt"]
+[ext_resource type="Script" path="res://combat/components/hitbox/hitbox.gd" id="4_hit"]
+[ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="5_spark"]
+[ext_resource type="PackedScene" path="res://combat/effects/slash/slash.tscn" id="6_slash"]
+
+[sub_resource type="CapsuleShape2D" id="Cap_body"]
+radius = 15.0
+height = 56.0
+
+[sub_resource type="CapsuleShape2D" id="Cap_hurt"]
+radius = 16.0
+height = 56.0
+
+[sub_resource type="CircleShape2D" id="Circ_attack"]
+radius = 30.0
+
+[node name="Duelist" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_duel")
+move_speed = 130.0
+hitstun_time = 0.1
+knockback_resist = 0.3
+spark_scene = ExtResource("5_spark")
+slash_scene = ExtResource("6_slash")
+
+[node name="Visual" type="Node2D" parent="."]
+
+[node name="Body" type="Polygon2D" parent="Visual"]
+color = Color(0.17, 0.07, 0.11, 1)
+polygon = PackedVector2Array(0, -34, 8, -26, 6, -18, 16, -8, 14, 6, 20, 22, 10, 30, 0, 28, -10, 30, -20, 22, -14, 6, -16, -8, -6, -18, -8, -26)
+
+[node name="Blade" type="Polygon2D" parent="Visual"]
+color = Color(0.82, 0.84, 0.93, 1)
+polygon = PackedVector2Array(16, -2, 54, 9, 50, 13, 16, 6)
+
+[node name="Eye" type="Polygon2D" parent="Visual"]
+position = Vector2(2, -24)
+color = Color(1, 0.22, 0.2, 1)
+polygon = PackedVector2Array(0, -4, 5, 0, 0, 4, -5, 0)
+
+[node name="BodyCollision" type="CollisionShape2D" parent="."]
+shape = SubResource("Cap_body")
+
+[node name="Combat" type="Node2D" parent="."]
+
+[node name="Health" type="Node" parent="Combat"]
+script = ExtResource("2_health")
+max_hp = 120
+
+[node name="Hurtbox" type="Area2D" parent="Combat"]
+collision_layer = 16
+collision_mask = 0
+monitoring = false
+script = ExtResource("3_hurt")
+health = NodePath("../Health")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/Hurtbox"]
+shape = SubResource("Cap_hurt")
+
+[node name="AttackHitbox" type="Area2D" parent="Combat"]
+position = Vector2(40, -10)
+collision_layer = 64
+collision_mask = 8
+monitoring = false
+script = ExtResource("4_hit")
+damage = 14
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/AttackHitbox"]
+shape = SubResource("Circ_attack")

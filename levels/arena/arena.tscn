@@ -1,0 +1,130 @@
+[gd_scene load_steps=10 format=3 uid="uid://carenavoider01"]
+
+[ext_resource type="Script" path="res://levels/arena/arena.gd" id="1_arena"]
+[ext_resource type="Script" path="res://camera/game_camera.gd" id="2_cam"]
+[ext_resource type="PackedScene" path="res://actors/player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://ui/hud/hud.tscn" id="4_hud"]
+[ext_resource type="PackedScene" path="res://actors/enemies/grunt/grunt.tscn" id="5_grunt"]
+[ext_resource type="PackedScene" path="res://actors/enemies/duelist/duelist.tscn" id="6_duel"]
+
+[sub_resource type="RectangleShape2D" id="Rect_ground"]
+size = Vector2(2400, 200)
+
+[sub_resource type="RectangleShape2D" id="Rect_wall"]
+size = Vector2(80, 1200)
+
+[sub_resource type="RectangleShape2D" id="Rect_plat"]
+size = Vector2(240, 24)
+
+[node name="Arena" type="Node2D"]
+script = ExtResource("1_arena")
+grunt_scene = ExtResource("5_grunt")
+duelist_scene = ExtResource("6_duel")
+
+[node name="Sky" type="CanvasLayer" parent="."]
+layer = -100
+
+[node name="BG" type="ColorRect" parent="Sky"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.07, 0.06, 0.12, 1)
+
+[node name="World" type="Node2D" parent="."]
+
+[node name="HillsFar" type="Polygon2D" parent="World"]
+color = Color(0.11, 0.09, 0.17, 1)
+polygon = PackedVector2Array(-1400, 250, -1400, -40, -1000, -110, -600, -30, -150, -130, 300, -50, 800, -140, 1200, -40, 1400, -90, 1400, 250)
+
+[node name="HillsNear" type="Polygon2D" parent="World"]
+color = Color(0.09, 0.07, 0.14, 1)
+polygon = PackedVector2Array(-1400, 260, -1400, 20, -900, -40, -400, 40, 100, -60, 650, 20, 1100, -70, 1400, 10, 1400, 260)
+
+[node name="Ground" type="StaticBody2D" parent="World"]
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Ground"]
+position = Vector2(0, 100)
+shape = SubResource("Rect_ground")
+
+[node name="GroundVisual" type="Polygon2D" parent="World/Ground"]
+color = Color(0.14, 0.12, 0.22, 1)
+polygon = PackedVector2Array(-1200, 0, 1200, 0, 1200, 200, -1200, 200)
+
+[node name="GroundTop" type="Polygon2D" parent="World/Ground"]
+color = Color(0.5, 0.34, 0.72, 1)
+polygon = PackedVector2Array(-1200, 0, 1200, 0, 1200, 6, -1200, 6)
+
+[node name="LeftWall" type="StaticBody2D" parent="World"]
+position = Vector2(-1180, -300)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/LeftWall"]
+shape = SubResource("Rect_wall")
+
+[node name="Visual" type="Polygon2D" parent="World/LeftWall"]
+color = Color(0.1, 0.09, 0.16, 1)
+polygon = PackedVector2Array(-20, -600, 20, -600, 20, 300, -20, 300)
+
+[node name="RightWall" type="StaticBody2D" parent="World"]
+position = Vector2(1180, -300)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/RightWall"]
+shape = SubResource("Rect_wall")
+
+[node name="Visual" type="Polygon2D" parent="World/RightWall"]
+color = Color(0.1, 0.09, 0.16, 1)
+polygon = PackedVector2Array(-20, -600, 20, -600, 20, 300, -20, 300)
+
+[node name="Plat1" type="StaticBody2D" parent="World"]
+position = Vector2(-300, -96)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Plat1"]
+position = Vector2(0, 12)
+shape = SubResource("Rect_plat")
+
+[node name="Visual" type="Polygon2D" parent="World/Plat1"]
+color = Color(0.16, 0.13, 0.24, 1)
+polygon = PackedVector2Array(-120, 0, 120, 0, 120, 24, -120, 24)
+
+[node name="Top" type="Polygon2D" parent="World/Plat1"]
+color = Color(0.5, 0.34, 0.72, 1)
+polygon = PackedVector2Array(-120, 0, 120, 0, 120, 5, -120, 5)
+
+[node name="Plat2" type="StaticBody2D" parent="World"]
+position = Vector2(300, -168)
+collision_layer = 1
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Plat2"]
+position = Vector2(0, 12)
+shape = SubResource("Rect_plat")
+
+[node name="Visual" type="Polygon2D" parent="World/Plat2"]
+color = Color(0.16, 0.13, 0.24, 1)
+polygon = PackedVector2Array(-120, 0, 120, 0, 120, 24, -120, 24)
+
+[node name="Top" type="Polygon2D" parent="World/Plat2"]
+color = Color(0.5, 0.34, 0.72, 1)
+polygon = PackedVector2Array(-120, 0, 120, 0, 120, 5, -120, 5)
+
+[node name="Actors" type="Node2D" parent="."]
+
+[node name="Player" parent="Actors" instance=ExtResource("3_player")]
+position = Vector2(0, -60)
+
+[node name="Projectiles" type="Node2D" parent="."]
+
+[node name="Effects" type="Node2D" parent="."]
+
+[node name="GameCamera" type="Camera2D" parent="."]
+position = Vector2(0, -60)
+script = ExtResource("2_cam")
+
+[node name="Hud" parent="." instance=ExtResource("4_hud")]

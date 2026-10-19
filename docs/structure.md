@@ -155,6 +155,24 @@ HitboxComponent (Area2D)  ──area_entered──▶  HurtboxComponent (Area2D)
 - Hitbox(Area2D)는 상대 진영의 Hurtbox 레이어만 mask한다.
 - Hurtbox(Area2D)는 layer만 가지고 mask는 0 (스스로 감지하지 않고 감지당하기만 한다).
 
+#### 이 게임의 실제 레이어 배치 (Voider)
+
+`project.godot`의 `[layer_names]`와 `core/physics/collision_layers.gd`(상수)에 정의한다.
+
+| # | 이름 | 쓰는 곳 | layer | mask |
+|---|---|---|---|---|
+| 1 | `world` | Ground/Walls/Platforms (StaticBody2D) | 1 | 0 |
+| 2 | `player_body` | Player (CharacterBody2D) | 2 | world |
+| 3 | `enemy_body` | Enemy (CharacterBody2D) | 4 | world |
+| 4 | `player_hurtbox` | Player Hurtbox | 8 | 0 |
+| 5 | `enemy_hurtbox` | Enemy Hurtbox | 16 | 0 |
+| 6 | `player_hitbox` | Player AttackHitbox | 32 | enemy_hurtbox |
+| 7 | `enemy_hitbox` | Enemy AttackHitbox | 64 | player_hurtbox |
+
+- 바디는 world만 mask → 플레이어와 적은 서로 밀지 않고 통과한다(근접전에서 몸싸움 노이즈 제거).
+- **패링 예외**: 플레이어 `Combat/ParryBox`(Area2D)는 mask=`enemy_hitbox`(64)로 적 공격 판정을 직접 감지한다. 패링 창이 열린 동안 적 Hitbox를 감지하면 패링 성공으로 처리한다. 적 Hitbox는 `enemy_hitbox` layer를 켜 두므로 ParryBox가 감지할 수 있다(이것이 Hurtbox가 아닌 Area2D가 상대 Hitbox를 감지하는 유일한 지점).
+- 피격/패링 연결은 씬의 NodePath 직렬화에 의존하지 않고 Actor의 `_ready()`에서 `hurtbox.health = health`로 코드 연결한다(손으로 작성한 `.tscn`에서 노드 타입 export가 안정적으로 풀리지 않는 경우 대비).
+
 ### Level
 
 ```text
@@ -184,18 +202,41 @@ Main (Node)
 
 ---
 
-## 5. 현재 실제 Scene Tree
+## 5. 현재 실제 Scene Tree (Voider — 첫 플레이어블)
 
 ```text
 Main (Node)                                   app/main.tscn   (run/main_scene)
+├── Arena (Node2D)                            levels/arena/arena.tscn   (arena.gd)
+│   ├── Sky (CanvasLayer, layer -100) └ BG(ColorRect)
+│   ├── World (Node2D)                        Hills / Ground / Walls / Plat1 / Plat2
+│   ├── Actors (Node2D) └ Player              actors/player/player.tscn
+│   ├── Projectiles (Node2D)                  (런타임 투사체 — 아직 미사용)
+│   ├── Effects (Node2D, group "fx")          슬래시/스파크/잔상이 여기 붙는다
+│   ├── GameCamera (Camera2D)                 camera/game_camera.gd  (follow + lookahead + shake)
+│   └── Hud (CanvasLayer)                     ui/hud/hud.tscn  (체력 + 궁극기 바)
 └── Toolkit (CanvasLayer)                     toolkit/toolkit.tscn
-    └── DebugHud (Control)                    toolkit/debug_hud.gd
-        └── InfoLabel (Label)
+
+Player (CharacterBody2D)                       actors/player/player.gd
+├── Visual (Node2D) └ Sprite2D                 좌우 반전/스쿼시는 Visual에서만
+├── BodyCollision (CollisionShape2D)
+├── Trail (Line2D, top_level)                  대시/궁극기 잔광
+└── Combat (Node2D)
+    ├── Health / Hurtbox(+CollisionShape2D)
+    ├── AttackHitbox(+CollisionShape2D)        콤보/궁극기 판정 (code로 on/off·크기·데미지)
+    └── ParryBox (Area2D)                      패링 창 동안 적 Hitbox 감지
+
+Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/
+├── Visual (Node2D)                            Polygon2D 실루엣 (임시 아트, 플래시는 visual.modulate)
+├── BodyCollision (CollisionShape2D)
+└── Combat └ Health / Hurtbox / AttackHitbox
 ```
 
-- `Toolkit` (`toolkit.gd`): `tool_toggle_hud` HUD 표시 토글, `tool_restart` 현재 씬 재시작, `tool_pause` `get_tree().paused` 토글.
-- `DebugHud`: FPS, Frame Time, 현재 씬 이름을 매 프레임 표시.
-- Combat Pipeline 컴포넌트는 아직 어느 씬에서도 인스턴스되지 않는다 (사용하는 Actor/Attack이 생길 때 붙인다).
+- `GameFeel` (Autoload, `managers/game_feel.gd`): `hit_stop(duration)` 프리즈 프레임(실시간 복구 타이머), `shake(trauma)`는 `GameCamera.current`로 전달.
+- 전투 손맛(hit-stop/shake/슬래시·스파크·잔상)은 명중·패링·사망 순간에 적용한다. VFX는 외부 이미지 없이 `_draw`로 그린다 (`combat/effects/slash|spark|afterimage/`).
+- 입력 액션(추가분): `player_jump` `player_attack` `player_parry` `player_dash` `player_ultimate` + `player_move_left/right`에 A/D 추가.
+- `Toolkit` (`toolkit.gd`): `tool_toggle_hud` / `tool_restart` / `tool_pause`.
+- 적 전용 기술(돌진/참격)은 현재 각 적 스크립트 안에 있다. 두 번째 사용처가 생기면 `combat/attacks/`로 올린다.
+- 플레이어 전투 기술(콤보/패링/대시/궁극기)은 지금은 `player.gd`에 모아 feel을 빠르게 튜닝한다. "장착형 어빌리티" 시스템(두 번째 사용자)이 실제로 생기면 `actors/player/abilities/<name>/`로 분리한다.
 
 ---
 

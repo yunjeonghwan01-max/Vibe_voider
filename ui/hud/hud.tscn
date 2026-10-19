@@ -1,0 +1,85 @@
+[gd_scene load_steps=2 format=3 uid="uid://chudvoider0001"]
+
+[ext_resource type="Script" path="res://ui/hud/hud.gd" id="1_hud"]
+
+[node name="Hud" type="CanvasLayer"]
+script = ExtResource("1_hud")
+
+[node name="Root" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="HealthBar" type="Control" parent="Root"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 22.0
+offset_right = 304.0
+offset_bottom = 40.0
+
+[node name="Back" type="ColorRect" parent="Root/HealthBar"]
+layout_mode = 0
+offset_right = 280.0
+offset_bottom = 18.0
+color = Color(0.05, 0.04, 0.08, 0.75)
+
+[node name="Fill" type="ColorRect" parent="Root/HealthBar"]
+layout_mode = 0
+offset_right = 280.0
+offset_bottom = 18.0
+color = Color(0.45, 1, 0.55, 1)
+
+[node name="Label" type="Label" parent="Root/HealthBar"]
+layout_mode = 0
+offset_left = 6.0
+offset_top = -1.0
+offset_right = 60.0
+offset_bottom = 17.0
+theme_override_colors/font_color = Color(1, 1, 1, 0.85)
+theme_override_font_sizes/font_size = 13
+text = "HP"
+
+[node name="UltBar" type="Control" parent="Root"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 48.0
+offset_right = 244.0
+offset_bottom = 60.0
+
+[node name="Back" type="ColorRect" parent="Root/UltBar"]
+layout_mode = 0
+offset_right = 220.0
+offset_bottom = 12.0
+color = Color(0.05, 0.04, 0.08, 0.75)
+
+[node name="Fill" type="ColorRect" parent="Root/UltBar"]
+layout_mode = 0
+offset_right = 220.0
+offset_bottom = 12.0
+color = Color(0.55, 0.45, 0.95, 1)
+
+[node name="ReadyLabel" type="Label" parent="Root/UltBar"]
+visible = false
+layout_mode = 0
+offset_left = 230.0
+offset_top = -4.0
+offset_right = 420.0
+offset_bottom = 16.0
+theme_override_colors/font_color = Color(1, 0.95, 0.6, 1)
+theme_override_font_sizes/font_size = 14
+text = "ULT READY  [U]"
+
+[node name="Hint" type="Label" parent="Root"]
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 24.0
+offset_top = -40.0
+offset_right = 760.0
+offset_bottom = -16.0
+theme_override_colors/font_color = Color(1, 1, 1, 0.5)
+theme_override_font_sizes/font_size = 13
+text = "Move  A/D      Jump  Space      Attack  J      Parry  K      Dash  L      Ultimate  U"

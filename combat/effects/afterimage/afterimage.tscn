@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://bafterimg00001"]
+
+[ext_resource type="Script" path="res://combat/effects/afterimage/afterimage.gd" id="1_after"]
+
+[node name="Afterimage" type="Sprite2D"]
+script = ExtResource("1_after")

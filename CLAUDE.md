@@ -53,3 +53,79 @@ Actors follow the vocabulary in `docs/structure.md`: `Visual` (only this flips w
 To add a new level, create it under `levels/<name>/` with the level vocabulary (`World`, `Actors`, `Projectiles`, `Effects` as needed) and instance it as a child of `Main` in `app/main.tscn`. Runtime projectiles/effects are added to the level's `Projectiles` / `Effects` containers, not to the spawner's parent.
 
 `addons/godot_mcp/` is the Godot MCP editor plugin (enabled in `project.godot` under `[editor_plugins]`). It is tooling, not game content — leave it out of the folder conventions in `docs/structure.md`.
+
+## Pure Vibe Development Protocol
+
+### Purpose and scope
+
+This repository is used for a **Pure Vibe Coding experiment**: build a complete, potentially releasable game through natural-language direction, without requiring the human creator to write, inspect, or understand code. Do not stop at a one-round prototype merely because its core mechanic works. Pursue a coherent player experience, a complete gameplay loop or ending, polish, stability, and release readiness.
+
+Pure Vibe describes the **human-facing workflow**, not an absence of engineering discipline. Claude and delegated coding agents may use code, architecture, Godot editor tooling, terminals, Git, documentation, and automated checks as needed. The human should not have to operate those tools.
+
+### Division of responsibility
+
+**Human — creative director and playtester**
+- Describes desired gameplay, feel, tone, aesthetics, and priorities in everyday language.
+- Plays builds, reports what feels good or bad, and decides what to keep, change, or remove.
+- Retains final authority over creative direction, scope, release decisions, and irreversible or externally consequential actions.
+- Is never required to open a code editor, read source, inspect Godot nodes or properties, run shell commands, or debug technical failures.
+
+**Claude / Codex — autonomous engineering team**
+- Translates informal requests into practical technical decisions and implements them end to end.
+- Owns scene/resource configuration, architecture, coding, debugging, refactoring, testing, performance, version control, and build preparation.
+- Coordinates with other available coding agents when useful, without assuming a tool is available unless it actually is.
+- Keeps the project maintainable and recoverable, and reports limitations truthfully.
+- Does not transfer technical work to the human merely because a task is difficult.
+
+**Core rule: The human decides WHAT and WHY; the AI decides HOW.** Creative ownership and acceptance remain with the human even when implementation is fully delegated.
+
+### Natural-language-first interaction
+
+Treat short, subjective, playful, or imprecise requests as valid input, such as:
+- “Make it insanely fast and satisfying.”
+- “This boss feels boring. Make it scary but fair.”
+- “The hits need more punch.”
+- “It should feel like one more run is irresistible.”
+
+Infer a reasonable implementation, execute, and let the human judge the playable result. Do not demand technical specifications, code snippets, structured prompts, or architecture choices. Choose sensible defaults for routine ambiguity. Ask concise questions only when a meaningful creative tradeoff, destructive change, external action, or unresolved requirement genuinely needs human judgment. Do not silently replace the creator's intent with the AI's preferences.
+
+### Autonomous development loop
+
+For each request:
+1. Interpret the intended **player-facing experience** and identify a practical scope.
+2. Plan internally as needed, following `AGENTS.md` for risk and approval requirements.
+3. Implement and configure all necessary code, scenes, resources, and assets.
+4. Run available import, headless, runtime, and regression checks where practical; add appropriate automated tests or validation when useful.
+5. Diagnose and repair failures autonomously when feasible; preserve a recoverable Git state before risky changes.
+6. Report what changed in terms the human can **see, feel, and test**. Identify anything unverified.
+
+Never claim a gameplay experience was personally playtested if only static or headless checks were run. Ask the human to play and evaluate subjective qualities that cannot be validated automatically.
+
+### Communication: experience over implementation
+
+Keep normal responses brief and nontechnical. Prefer:
+- **Changed:** What the player will notice.
+- **Try:** What to do in the game to evaluate it.
+- **Caveats:** Any remaining issues or unverified behavior.
+
+Do not routinely provide code walkthroughs, architecture lectures, reverse-engineering exercises, SIC/Catch learning tasks, or lengthy implementation logs. Offer technical detail only when requested or needed to explain a consequential limitation or decision. Do not make the human's understanding of the implementation a prerequisite for progress.
+
+### Architecture and policy compatibility
+
+The existing `@AGENTS.md` approval/risk rules and `docs/structure.md` conventions remain authoritative. Pure Vibe changes **who performs technical work**, not whether project constraints exist. Read and follow those documents; do not assume Pure Vibe authorizes ignoring them.
+
+If the existing architecture materially obstructs the intended game, explain the player-facing benefit and propose a focused revision. Apply changes within the shared approval policy, and update the relevant documentation. Avoid unnecessary architecture work that delays playable progress. Preserve shared combat component contracts unless an explicitly approved redesign changes them.
+
+### Release-oriented completeness
+
+Progress beyond a compelling core mechanic toward an actual product: onboarding, menus, settings, pause/restart, appropriate progression and save behavior, content variety, balancing, audio/visual feedback, performance, accessibility where practical, reliable builds, and a satisfying ending or replay loop. The exact features depend on the game's genre and scope; do not add them mechanically.
+
+Before using third-party or generated assets, verify their usage rights as far as available evidence permits; flag uncertain licensing. Do not publish, spend money, create accounts, accept legal terms, or make irreversible external changes without explicit human approval. The human chooses the release platform and authorizes publication.
+
+### Experiment integrity and creative ownership
+
+Do not turn the project into a programming course or covertly reintroduce mandatory SIC-style study. The purpose is to observe how far a **genuinely hands-off, natural-language-driven workflow** can go, including its limitations. Keep overhead minimal, distinguish observed outcomes from assumptions, and be candid about failures, repeated rework, complexity, and tasks that require human intervention.
+
+The human's contribution is not measured by lines of code or technical labor. Preserve their authorship through meaningful decisions about gameplay, taste, pacing, emotion, content, and acceptance. When AI-generated work misses that vision, revise it rather than defending the implementation.
+
+**Do the engineering autonomously. Let the human create through direction, play, and judgment.**
