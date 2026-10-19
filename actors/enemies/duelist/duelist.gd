@@ -39,7 +39,6 @@ func _on_ready() -> void:
 
 
 func _enemy_ai(delta: float) -> void:
-	visual.scale = visual.scale.lerp(Vector2(1.0, 1.0), 1.0 - exp(-12.0 * delta))
 	var dist := distance_to_target()
 
 	match _phase:

@@ -78,7 +78,7 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_update_flash(delta)
-	_update_visual_facing()
+	_update_visual(delta)
 
 
 ## 하위 클래스가 구현하는 AI. 기본은 정지.
@@ -198,17 +198,26 @@ func _flash(col: Color) -> void:
 
 
 func _update_flash(delta: float) -> void:
+	if state == State.DEAD:
+		return
 	if _flash_amount > 0.0:
 		_flash_amount = maxf(_flash_amount - delta * 7.0, 0.0)
 		visual.modulate = Color.WHITE.lerp(_flash_col, _flash_amount)
-	elif visual.modulate != Color.WHITE and state != State.DEAD:
+	elif state == State.STAGGER:
+		# 패링당한 빈틈 — 스태거 내내 청록빛으로 "지금 때려" 신호를 유지한다.
+		visual.modulate = Color(0.55, 0.8, 1.35)
+	elif visual.modulate != Color.WHITE:
 		visual.modulate = Color.WHITE
 
 
-func _update_visual_facing() -> void:
+func _update_visual(delta: float) -> void:
 	if state == State.DEAD:
 		return
-	visual.scale.x = absf(visual.scale.x) * signf(facing if facing != 0.0 else 1.0)
+	# 스쿼시 복구 — 어떤 상태(히트스턴/스태거 포함)에서도 매 프레임 크기를 1로 되돌린다.
+	# (예전엔 ACTIVE에서만 복구돼서 피격 중 눌린 채 멈추는 "뭉개짐" 버그가 있었다.)
+	var mag := visual.scale.abs().lerp(Vector2.ONE, 1.0 - exp(-16.0 * delta))
+	var sign := signf(facing) if facing != 0.0 else 1.0
+	visual.scale = Vector2(mag.x * sign, mag.y)
 
 
 func _spawn_death_spark() -> void:

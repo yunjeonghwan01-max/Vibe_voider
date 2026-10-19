@@ -44,12 +44,12 @@ enum Action { NONE, ATTACK, PARRY, DASH, ULTIMATE, HURT, DEAD }
 @export var combo_knockback: Array[float] = [160.0, 160.0, 320.0]
 @export var combo_aim_degrees: Array[float] = [22.0, -22.0, 0.0]
 @export var swing_windup: float = 0.035
-@export var swing_active: float = 0.09
-@export var swing_recovery: float = 0.13
+@export var swing_active: float = 0.11
+@export var swing_recovery: float = 0.10
 @export var combo_reset_time: float = 0.32     # 마지막 입력 후 이 시간 지나면 콤보 초기화
 
 @export_group("Parry")
-@export var parry_window: float = 0.18          # 이 시간 안에 적 공격을 맞으면 패링 성공
+@export var parry_window: float = 0.22          # 이 시간 안에 적 공격을 맞으면 패링 성공
 @export var parry_recovery: float = 0.16        # 창이 닫힌 뒤 경직(패링 리스크)
 @export var parry_cooldown: float = 0.28
 
@@ -297,6 +297,10 @@ func _start_attack(index: int) -> void:
 
 func _process_attack(delta: float) -> void:
 	_action_time += delta
+	# 스윙 내내 공격 입력을 버퍼링 → 연타가 매끄럽게 이어진다(윈드업 중 눌러도 유효).
+	if Input.is_action_just_pressed("player_attack"):
+		_attack_buffered = true
+
 	# 지상이면 마찰로 런지 감속, 공중이면 약한 제어
 	if is_on_floor():
 		velocity.x = move_toward(velocity.x, _move_input() * run_speed * 0.4, ground_friction * 0.6 * delta)
@@ -314,10 +318,8 @@ func _process_attack(delta: float) -> void:
 		_hitbox_live = false
 		attack_hitbox.monitoring = false
 
-	# 회복 구간에서 버퍼된 입력을 받아 콤보 연결 / 대시 캔슬
+	# 액티브 이후부터 대시/패링으로 캔슬 가능
 	if _action_time >= active_start:
-		if Input.is_action_just_pressed("player_attack"):
-			_attack_buffered = true
 		if Input.is_action_just_pressed("player_dash") and _can_dash():
 			_end_attack()
 			_start_dash()
@@ -343,14 +345,36 @@ func _end_attack() -> void:
 
 
 func _on_attack_landed(hurt: HurtboxComponent) -> void:
-	# 명중 손맛: 짧은 프리즈 + 흔들림 + 스파크 + 궁극기 충전
-	GameFeel.hit_stop(0.05)
-	GameFeel.shake(0.22)
+	if action == Action.ULTIMATE:
+		_on_ultimate_hit(hurt)
+		return
+	# 기본 콤보: 끊김이 안 느껴지게 프리즈는 가볍게, 마무리(3타)만 묵직하게
+	var finisher := _combo_index >= combo_damage.size() - 1
+	GameFeel.hit_stop(0.06 if finisher else 0.025)
+	GameFeel.shake(0.32 if finisher else 0.16)
 	_add_ultimate(ult_charge_on_hit)
 	var hit_pos: Vector2 = hurt.global_position
-	_spawn_spark(hit_pos, Color(1.0, 0.95, 0.7, 1.0), 7, 90.0, rad_to_deg(Vector2(facing, -0.2).angle()), 46.0)
+	_spawn_spark(hit_pos, Color(1.0, 0.95, 0.7, 1.0), 8, 95.0, rad_to_deg(Vector2(facing, -0.2).angle()), 50.0)
 	# 명중 시 살짝 더 파고드는 런지
 	velocity.x = facing * maxf(absf(velocity.x), 120.0)
+
+
+func _on_ultimate_hit(hurt: HurtboxComponent) -> void:
+	# 궁극기 명중 — 맞는 적 몸에 강한 폭발형 버스트 + 화면 플래시
+	GameFeel.hit_stop(0.09)
+	GameFeel.shake(0.6)
+	GameFeel.flash(Color(0.85, 0.6, 1.0), 0.28, 0.16)
+	_spawn_impact(hurt.global_position)
+
+
+func _spawn_impact(pos: Vector2) -> void:
+	if spark_scene == null:
+		return
+	var s := spark_scene.instantiate() as SparkEffect
+	_fx_parent().add_child(s)
+	s.global_position = pos
+	s.burst(Color(1.0, 0.85, 1.0, 1.0), 22, 360.0, 0.0, 110.0, 0.34)
+	s.with_ring(Color(0.9, 0.7, 1.0, 1.0), 120.0)
 
 
 # ─────────────────────────── 패링 ───────────────────────────
@@ -367,6 +391,8 @@ func _start_parry() -> void:
 	parry_box.monitoring = true
 	parry_box.position = Vector2(facing * absf(_attack_hitbox_base_pos.x), _attack_hitbox_base_pos.y)
 	_squash = Vector2(0.86, 1.14)
+	sprite.modulate = Color(0.7, 1.1, 1.45)   # 패링 자세 — 청록빛으로 물든다(창이 열렸다는 신호)
+	_spawn_parry_stance()
 
 
 func _process_parry(delta: float) -> void:
@@ -375,15 +401,26 @@ func _process_parry(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0.0, ground_friction * delta)
 	_apply_gravity(delta)
 
+	# 창이 열린 동안엔 enter 신호를 놓치지 않도록 겹친 적 Hitbox를 매 프레임 직접 확인한다.
+	if parry_box.monitoring and not _parry_success:
+		for area in parry_box.get_overlapping_areas():
+			var hb := area as HitboxComponent
+			if hb != null:
+				_parry_success = true
+				_trigger_parry_success(hb)
+				break
+
 	if _action_time >= parry_window and parry_box.monitoring:
 		# 창 종료 — 성공 못 했으면 이제부터 다시 취약해진다.
 		parry_box.monitoring = false
 		if not _parry_success:
 			hurtbox.invincible = false
+			sprite.modulate = Color.WHITE
 
 	if _action_time >= parry_window + parry_recovery:
 		action = Action.NONE
 		hurtbox.invincible = false
+		sprite.modulate = Color.WHITE
 
 
 func _on_parry_box_area_entered(area: Area2D) -> void:
@@ -397,13 +434,15 @@ func _on_parry_box_area_entered(area: Area2D) -> void:
 
 
 func _trigger_parry_success(enemy_hitbox: HitboxComponent) -> void:
-	# 강한 손맛: 더 긴 프리즈 + 큰 흔들림 + 링 스파크 + 궁극기 대량 충전
-	GameFeel.hit_stop(0.11, 0.03)
-	GameFeel.shake(0.5)
+	# 아주 명확한 손맛: 화면 플래시 + 강한 프리즈 + 큰 흔들림 + 링 스파크 + 궁극기 대량 충전
+	GameFeel.hit_stop(0.14, 0.02)
+	GameFeel.shake(0.75)
+	GameFeel.flash(Color(0.8, 0.95, 1.0), 0.5, 0.16)
 	_add_ultimate(ult_charge_on_parry)
 	hurtbox.invincible = true            # 성공 후 잠깐 더 안전
-	var spark_pos := global_position + Vector2(facing * 26.0, -18.0)
-	_spawn_parry_spark(spark_pos)
+	sprite.modulate = Color(2.2, 2.3, 2.6)   # 성공 순간 번쩍 (창 종료 때 흰색으로 복구)
+	_spawn_parry_spark(global_position + Vector2(facing * 26.0, -16.0))
+	_spawn_parry_spark(enemy_hitbox.global_position)  # 튕겨낸 지점에도 스파크
 
 	# 공격자(적)에게 패링당했음을 알린다 — 적이 경직/반격 재조정한다.
 	var attacker: Node = enemy_hitbox.source if enemy_hitbox.source else enemy_hitbox.owner
@@ -610,6 +649,20 @@ func _spawn_parry_spark(pos: Vector2) -> void:
 	s.global_position = pos
 	s.burst(Color(0.8, 0.95, 1.0, 1.0), 14, 360.0, 0.0, 70.0, 0.3)
 	s.with_ring(Color(1.0, 1.0, 1.0, 1.0), 90.0)
+
+
+func _spawn_parry_stance() -> void:
+	# 패링 창이 열릴 때 앞쪽에 청록 호를 띄워 "지금 패링 중"임을 보이게 한다.
+	if slash_scene == null:
+		return
+	var s := slash_scene.instantiate() as SlashEffect
+	s.color = Color(0.5, 0.9, 1.0, 0.75)
+	s.core_color = Color(0.85, 1.0, 1.0, 1.0)
+	s.arc_degrees = 150.0
+	s.lifetime = 0.22
+	_fx_parent().add_child(s)
+	s.global_position = global_position + Vector2(facing * 26.0, -10.0)
+	s.setup(facing, 0.0, 0.95)
 
 
 func _spawn_afterimage() -> void:

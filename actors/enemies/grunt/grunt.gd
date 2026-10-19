@@ -25,8 +25,6 @@ var _cd: float = 0.0
 
 func _enemy_ai(delta: float) -> void:
 	_cd = maxf(_cd - delta, 0.0)
-	visual.scale = visual.scale.lerp(Vector2(1.0, 1.0), 1.0 - exp(-12.0 * delta))
-
 	match _atk:
 		Atk.APPROACH:
 			facing = dir_to_target()
