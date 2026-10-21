@@ -6,6 +6,7 @@ extends CanvasLayer
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	debug_hud.visible = false   # 게임 HUD를 가리지 않도록 기본은 숨김 (tool_toggle_hud = F1로 켠다)
 
 
 func _unhandled_input(event: InputEvent) -> void:

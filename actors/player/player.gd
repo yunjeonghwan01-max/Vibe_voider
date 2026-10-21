@@ -4,10 +4,14 @@ extends CharacterBody2D
 ## 떠돌이 검사(검은 고양이). 빠르고 반응 좋은 이동 + 근접 전투의 핵심.
 ##
 ## 이동:  달리기(가감속) / 점프(코요테 타임 + 점프 버퍼 + 가변 높이) / 대시(무적·잔상)
-## 전투:  3연속 참격 콤보 / 패링(전용 버튼·타이밍) / 궁극기(전투로 충전, 수동 발동)
+## 전투:  3연속 참격 콤보 / 반격(패링) / 궁극기(전투로 충전, 수동 발동)
+##
+## 반격 규칙: 적이 공격 직전 0.4초 동안 금빛으로 "반짝"인다. 그 순간 반격 키를 눌러야만 성공한다.
+##   - 누른 순간 ParryBox 안에 반짝이는 적의 공격 판정이 있으면 성공 → 적 경직, 공격 취소.
+##   - 아니면 헛반격: 짧은 경직 + 재사용 대기(연타로는 맞출 수 없다). 헛반격엔 무적이 없다.
 ##
 ## 피격 반응은 Combat/Health, Combat/Hurtbox 시그널로만 받는다 (take_damage를 직접 갖지 않는다).
-## 손맛(hit-stop/shake/VFX)은 명중·패링 순간에 적용한다.
+## 손맛(hit-stop/shake/VFX/SFX)은 명중·반격 순간에 적용한다.
 
 signal health_changed(hp: int, max_hp: int)
 signal ultimate_changed(charge: float, max_charge: float)
@@ -49,9 +53,9 @@ enum Action { NONE, ATTACK, PARRY, DASH, ULTIMATE, HURT, DEAD }
 @export var combo_reset_time: float = 0.32     # 마지막 입력 후 이 시간 지나면 콤보 초기화
 
 @export_group("Parry")
-@export var parry_window: float = 0.22          # 이 시간 안에 적 공격을 맞으면 패링 성공
-@export var parry_recovery: float = 0.16        # 창이 닫힌 뒤 경직(패링 리스크)
-@export var parry_cooldown: float = 0.28
+@export var parry_success_time: float = 0.24     # 성공 후 자세 유지(무적)
+@export var parry_whiff_time: float = 0.3        # 헛반격 경직 (무적 없음)
+@export var parry_whiff_cooldown: float = 0.5    # 헛반격 후 재입력 금지 — 반짝임(0.4초)보다 길어서 연타가 안 통한다
 
 @export_group("Ultimate")
 @export var ultimate_max: float = 100.0
@@ -67,14 +71,27 @@ enum Action { NONE, ATTACK, PARRY, DASH, ULTIMATE, HURT, DEAD }
 @export var afterimage_scene: PackedScene
 
 # ─────────────────────────── 노드 ───────────────────────────
-@onready var visual: Node2D = $Visual
-@onready var sprite: Sprite2D = $Visual/Sprite2D
+@onready var visual: PlayerVisual = $Visual
 @onready var trail: Line2D = $Trail
 @onready var health: HealthComponent = $Combat/Health
 @onready var hurtbox: HurtboxComponent = $Combat/Hurtbox
 @onready var attack_hitbox: HitboxComponent = $Combat/AttackHitbox
 @onready var attack_shape: CollisionShape2D = $Combat/AttackHitbox/CollisionShape2D
 @onready var parry_box: Area2D = $Combat/ParryBox
+@onready var sfx_swing: Array[AudioStreamPlayer2D] = [
+	$Audio/Swing1 as AudioStreamPlayer2D, $Audio/Swing2 as AudioStreamPlayer2D, $Audio/Swing3 as AudioStreamPlayer2D]
+@onready var sfx_hit: AudioStreamPlayer2D = $Audio/Hit
+@onready var sfx_hit_heavy: AudioStreamPlayer2D = $Audio/HitHeavy
+@onready var sfx_parry: AudioStreamPlayer2D = $Audio/Parry
+@onready var sfx_whiff: AudioStreamPlayer2D = $Audio/ParryWhiff
+@onready var sfx_dash: AudioStreamPlayer2D = $Audio/Dash
+@onready var sfx_jump: AudioStreamPlayer2D = $Audio/Jump
+@onready var sfx_land: AudioStreamPlayer2D = $Audio/Land
+@onready var sfx_step: AudioStreamPlayer2D = $Audio/Step
+@onready var sfx_hurt: AudioStreamPlayer2D = $Audio/Hurt
+@onready var sfx_death: AudioStreamPlayer2D = $Audio/Death
+@onready var sfx_ult_cast: AudioStreamPlayer2D = $Audio/UltCast
+@onready var sfx_ult_hit: AudioStreamPlayer2D = $Audio/UltHit
 
 # ─────────────────────────── 상태 ───────────────────────────
 var facing: float = 1.0
@@ -99,6 +116,8 @@ var _squash: Vector2 = Vector2.ONE   # 스쿼시&스트레치
 var _attack_hitbox_base_pos: Vector2
 var _was_on_floor: bool = false
 var _run_bob: float = 0.0
+var _flash_amount: float = 0.0
+var _flash_color: Color = Color.WHITE
 
 
 func _ready() -> void:
@@ -107,12 +126,12 @@ func _ready() -> void:
 	hurtbox.hit_received.connect(_on_hit_received)
 	health.died.connect(_on_died)
 	attack_hitbox.hit_landed.connect(_on_attack_landed)
-	parry_box.area_entered.connect(_on_parry_box_area_entered)
+	visual.footstep.connect(_on_footstep)
 
 	attack_hitbox.source = self
 	attack_hitbox.monitoring = false
 	attack_hitbox.apply_on_contact = true
-	parry_box.monitoring = false
+	parry_box.monitoring = true      # 항상 감시 — 반격 키를 누른 그 순간의 겹침을 바로 읽는다
 	_attack_hitbox_base_pos = attack_hitbox.position
 
 	_air_dashes_left = air_dashes
@@ -168,18 +187,19 @@ func _tick_timers(delta: float) -> void:
 
 # ─────────────────────── 자유 상태(이동/입력) ───────────────────────
 func _process_free(delta: float) -> void:
-	# 액션 입력 우선순위: 궁극기 > 대시 > 공격 > 패링 > 점프
+	# 액션 입력 우선순위: 궁극기 > 반격 > 대시 > 공격 > 점프
+	# (반격은 타이밍이 생명이라 다른 입력에 밀리지 않게 앞에 둔다)
 	if Input.is_action_just_pressed("player_ultimate") and is_ultimate_ready():
 		_start_ultimate()
+		return
+	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+		_start_parry()
 		return
 	if Input.is_action_just_pressed("player_dash") and _can_dash():
 		_start_dash()
 		return
 	if Input.is_action_just_pressed("player_attack"):
 		_start_attack(0)
-		return
-	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
-		_start_parry()
 		return
 
 	if Input.is_action_just_pressed("player_jump"):
@@ -194,7 +214,7 @@ func _move_input() -> float:
 	return Input.get_axis("player_move_left", "player_move_right")
 
 
-func _apply_horizontal(delta: float, dir: float, allow_turn: bool) -> void:
+func _apply_horizontal(delta: float, dir: float, _allow_turn: bool) -> void:
 	var on_floor := is_on_floor()
 	var accel := ground_accel if on_floor else air_accel
 	var friction := ground_friction if on_floor else air_friction
@@ -222,6 +242,7 @@ func _try_jump() -> void:
 		_jump_buffer = 0.0
 		_coyote = 0.0
 		_squash = Vector2(0.78, 1.26)
+		_sfx(sfx_jump, 0.08)
 
 
 # ─────────────────────────── 대시 ───────────────────────────
@@ -247,6 +268,8 @@ func _start_dash() -> void:
 	hurtbox.invincible = true
 	trail.visible = true
 	_squash = Vector2(1.35, 0.7)
+	visual.play(&"dash")
+	_sfx(sfx_dash, 0.06)
 	_spawn_afterimage()
 
 
@@ -256,10 +279,14 @@ func _process_dash(delta: float) -> void:
 	velocity.x = facing * dash_speed
 	if fmod(_action_time, 0.035) < delta:
 		_spawn_afterimage()
-	# 대시 중 공격 입력 → 대시 공격으로 캔슬(스타일리시)
+	# 대시 중 공격 입력 → 대시 공격으로 캔슬(스타일리시), 반격 입력 → 반격
 	if Input.is_action_just_pressed("player_attack"):
 		_end_dash()
 		_start_attack(0)
+		return
+	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+		_end_dash()
+		_start_parry()
 		return
 	if _action_time >= dash_time:
 		_end_dash()
@@ -270,6 +297,7 @@ func _end_dash() -> void:
 	hurtbox.invincible = false
 	trail.visible = false
 	velocity.x *= 0.5
+	visual.play(&"locomotion")
 
 
 # ─────────────────────────── 공격 콤보 ───────────────────────────
@@ -292,6 +320,8 @@ func _start_attack(index: int) -> void:
 	attack_hitbox.damage = combo_damage[_combo_index]
 	attack_hitbox.knockback_force = combo_knockback[_combo_index]
 	attack_hitbox.knockback_direction = Vector2(facing, -0.18).normalized()
+	visual.play(StringName("attack_%d" % (_combo_index + 1)))
+	_sfx(sfx_swing[_combo_index], 0.07)
 	_spawn_slash(combo_aim_degrees[_combo_index])
 
 
@@ -318,16 +348,15 @@ func _process_attack(delta: float) -> void:
 		_hitbox_live = false
 		attack_hitbox.monitoring = false
 
-	# 액티브 이후부터 대시/패링으로 캔슬 가능
-	if _action_time >= active_start:
-		if Input.is_action_just_pressed("player_dash") and _can_dash():
-			_end_attack()
-			_start_dash()
-			return
-		if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
-			_end_attack()
-			_start_parry()
-			return
+	# 반격은 스윙 어느 순간에도 끼어들 수 있다(타이밍을 놓치지 않게). 대시는 액티브 이후부터.
+	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+		_end_attack()
+		_start_parry()
+		return
+	if _action_time >= active_start and Input.is_action_just_pressed("player_dash") and _can_dash():
+		_end_attack()
+		_start_dash()
+		return
 
 	var total := swing_windup + swing_active + swing_recovery
 	if _action_time >= total:
@@ -342,6 +371,7 @@ func _end_attack() -> void:
 	_hitbox_live = false
 	action = Action.NONE
 	_combo_timer = combo_reset_time
+	visual.play(&"locomotion")
 
 
 func _on_attack_landed(hurt: HurtboxComponent) -> void:
@@ -350,11 +380,13 @@ func _on_attack_landed(hurt: HurtboxComponent) -> void:
 		return
 	# 기본 콤보: 끊김이 안 느껴지게 프리즈는 가볍게, 마무리(3타)만 묵직하게
 	var finisher := _combo_index >= combo_damage.size() - 1
-	GameFeel.hit_stop(0.06 if finisher else 0.025)
-	GameFeel.shake(0.32 if finisher else 0.16)
+	GameFeel.hit_stop(0.06 if finisher else 0.03)
+	GameFeel.shake(0.34 if finisher else 0.17)
+	_sfx(sfx_hit_heavy if finisher else sfx_hit, 0.1)
 	_add_ultimate(ult_charge_on_hit)
 	var hit_pos: Vector2 = hurt.global_position
-	_spawn_spark(hit_pos, Color(1.0, 0.95, 0.7, 1.0), 8, 95.0, rad_to_deg(Vector2(facing, -0.2).angle()), 50.0)
+	_spawn_spark(hit_pos, Color(1.0, 0.95, 0.7, 1.0), 10 if finisher else 7, 95.0,
+			rad_to_deg(Vector2(facing, -0.2).angle()), 62.0 if finisher else 48.0)
 	# 명중 시 살짝 더 파고드는 런지
 	velocity.x = facing * maxf(absf(velocity.x), 120.0)
 
@@ -364,6 +396,7 @@ func _on_ultimate_hit(hurt: HurtboxComponent) -> void:
 	GameFeel.hit_stop(0.09)
 	GameFeel.shake(0.6)
 	GameFeel.flash(Color(0.85, 0.6, 1.0), 0.28, 0.16)
+	_sfx(sfx_ult_hit, 0.08)
 	_spawn_impact(hurt.global_position)
 
 
@@ -377,22 +410,49 @@ func _spawn_impact(pos: Vector2) -> void:
 	s.with_ring(Color(0.9, 0.7, 1.0, 1.0), 120.0)
 
 
-# ─────────────────────────── 패링 ───────────────────────────
+# ─────────────────────────── 반격(패링) ───────────────────────────
 func _start_parry() -> void:
 	action = Action.PARRY
 	_action_time = 0.0
-	_parry_cd = parry_cooldown
-	_parry_success = false
-	var dir := _move_input()
-	if absf(dir) > 0.01:
-		facing = signf(dir)
 	velocity.x = move_toward(velocity.x, 0.0, run_speed)
-	hurtbox.invincible = true            # 창이 열린 동안은 피해를 받지 않는다
-	parry_box.monitoring = true
-	parry_box.position = Vector2(facing * absf(_attack_hitbox_base_pos.x), _attack_hitbox_base_pos.y)
 	_squash = Vector2(0.86, 1.14)
-	sprite.modulate = Color(0.7, 1.1, 1.45)   # 패링 자세 — 청록빛으로 물든다(창이 열렸다는 신호)
-	_spawn_parry_stance()
+
+	var targets := _glinting_attackers()
+	if targets.is_empty():
+		# 헛반격 — 반짝이지 않을 때 눌렀다. 경직 + 재사용 대기, 무적 없음.
+		_parry_success = false
+		_parry_cd = parry_whiff_cooldown
+		var dir := _move_input()
+		if absf(dir) > 0.01:
+			facing = signf(dir)
+		visual.play(&"parry")
+		_set_flash(Color(0.55, 0.7, 0.9), 0.35)
+		_sfx(sfx_whiff, 0.05)
+		_spawn_parry_stance(false)
+		return
+
+	_parry_success = true
+	_parry_cd = 0.0                   # 성공하면 바로 다음 공격(연격)도 받아칠 수 있다
+	facing = signf(targets[0].global_position.x - global_position.x)
+	if facing == 0.0:
+		facing = 1.0
+	hurtbox.invincible = true
+	visual.play(&"parry_success")
+	_spawn_parry_stance(true)
+	_trigger_parry_success(targets)
+
+
+## ParryBox 안에서 지금 반짝이고 있는(= 반격 가능한) 적들.
+func _glinting_attackers() -> Array[Enemy]:
+	var found: Array[Enemy] = []
+	for area in parry_box.get_overlapping_areas():
+		var hb := area as HitboxComponent
+		if hb == null:
+			continue
+		var enemy := hb.source as Enemy
+		if enemy != null and enemy.is_glinting() and not found.has(enemy):
+			found.append(enemy)
+	return found
 
 
 func _process_parry(delta: float) -> void:
@@ -401,53 +461,26 @@ func _process_parry(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0.0, ground_friction * delta)
 	_apply_gravity(delta)
 
-	# 창이 열린 동안엔 enter 신호를 놓치지 않도록 겹친 적 Hitbox를 매 프레임 직접 확인한다.
-	if parry_box.monitoring and not _parry_success:
-		for area in parry_box.get_overlapping_areas():
-			var hb := area as HitboxComponent
-			if hb != null:
-				_parry_success = true
-				_trigger_parry_success(hb)
-				break
-
-	if _action_time >= parry_window and parry_box.monitoring:
-		# 창 종료 — 성공 못 했으면 이제부터 다시 취약해진다.
-		parry_box.monitoring = false
-		if not _parry_success:
-			hurtbox.invincible = false
-			sprite.modulate = Color.WHITE
-
-	if _action_time >= parry_window + parry_recovery:
+	var duration := parry_success_time if _parry_success else parry_whiff_time
+	if _action_time >= duration:
 		action = Action.NONE
 		hurtbox.invincible = false
-		sprite.modulate = Color.WHITE
+		visual.play(&"locomotion")
 
 
-func _on_parry_box_area_entered(area: Area2D) -> void:
-	if action != Action.PARRY or _parry_success:
-		return
-	var hitbox := area as HitboxComponent
-	if hitbox == null:
-		return
-	_parry_success = true
-	_trigger_parry_success(hitbox)
-
-
-func _trigger_parry_success(enemy_hitbox: HitboxComponent) -> void:
-	# 아주 명확한 손맛: 화면 플래시 + 강한 프리즈 + 큰 흔들림 + 링 스파크 + 궁극기 대량 충전
-	GameFeel.hit_stop(0.14, 0.02)
-	GameFeel.shake(0.75)
-	GameFeel.flash(Color(0.8, 0.95, 1.0), 0.5, 0.16)
+func _trigger_parry_success(targets: Array[Enemy]) -> void:
+	# 아주 명확한 손맛: 금속음 + 화면 플래시 + 긴 프리즈 + 큰 흔들림 + 양쪽 링 스파크 + 궁극기 대량 충전
+	GameFeel.hit_stop(0.17, 0.02)
+	GameFeel.shake(0.8)
+	GameFeel.flash(Color(0.85, 0.97, 1.0), 0.55, 0.2)
+	_sfx(sfx_parry, 0.04)
 	_add_ultimate(ult_charge_on_parry)
-	hurtbox.invincible = true            # 성공 후 잠깐 더 안전
-	sprite.modulate = Color(2.2, 2.3, 2.6)   # 성공 순간 번쩍 (창 종료 때 흰색으로 복구)
-	_spawn_parry_spark(global_position + Vector2(facing * 26.0, -16.0))
-	_spawn_parry_spark(enemy_hitbox.global_position)  # 튕겨낸 지점에도 스파크
-
-	# 공격자(적)에게 패링당했음을 알린다 — 적이 경직/반격 재조정한다.
-	var attacker: Node = enemy_hitbox.source if enemy_hitbox.source else enemy_hitbox.owner
-	if attacker is Enemy:
-		(attacker as Enemy).on_parried(global_position)
+	_set_flash(Color(0.85, 1.0, 1.0), 1.0)
+	_spawn_parry_spark(global_position + Vector2(facing * 26.0, -16.0), 1.0)
+	for enemy in targets:
+		var contact := (global_position + enemy.global_position) * 0.5 + Vector2(0.0, -18.0)
+		_spawn_parry_spark(contact, 1.4)
+		enemy.on_parried(global_position)
 
 
 # ─────────────────────────── 궁극기 ───────────────────────────
@@ -475,6 +508,9 @@ func _start_ultimate() -> void:
 	_squash = Vector2(0.7, 1.4)
 	GameFeel.hit_stop(0.08)
 	GameFeel.shake(0.4)
+	_sfx(sfx_ult_cast, 0.0)
+	_set_flash(Color(0.85, 0.65, 1.0), 0.8)
+	visual.play(&"ultimate")
 	# 거대한 참격 — 전방위 스윕
 	attack_hitbox.reset_hits()
 	attack_hitbox.position = Vector2.ZERO
@@ -484,7 +520,7 @@ func _start_ultimate() -> void:
 	attack_shape.scale = Vector2(3.4, 3.4)
 	_spawn_slash(0.0, 2.6)
 	_spawn_slash(180.0, 2.6)
-	_spawn_parry_spark(global_position)
+	_spawn_parry_spark(global_position, 1.0)
 
 
 func _process_ultimate(delta: float) -> void:
@@ -508,16 +544,19 @@ func _process_ultimate(delta: float) -> void:
 		hurtbox.invincible = false
 		trail.visible = false
 		action = Action.NONE
+		visual.play(&"locomotion")
 
 
 # ─────────────────────────── 피격 / 사망 ───────────────────────────
 func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
-	if health.is_dead():
-		return
+	if health.hp - damage <= 0:
+		return                          # 치명타는 _on_died가 처리
 	_add_ultimate(ult_charge_on_damaged)
-	GameFeel.hit_stop(0.06)
-	GameFeel.shake(0.35)
-	health_changed.emit(health.hp, health.max_hp)
+	GameFeel.hit_stop(0.07)
+	GameFeel.shake(0.4)
+	GameFeel.flash(Color(1.0, 0.25, 0.25), 0.18, 0.12)
+	_sfx(sfx_hurt, 0.06)
+	health_changed.emit(health.hp - damage, health.max_hp)
 
 	# 넉백 + 피격 경직
 	if knockback != Vector2.ZERO:
@@ -528,8 +567,10 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	action = Action.HURT
 	_action_time = 0.0
 	attack_hitbox.monitoring = false
-	parry_box.monitoring = false
-	sprite.modulate = Color(1.6, 0.6, 0.6)
+	attack_shape.scale = Vector2.ONE
+	trail.visible = false
+	_set_flash(Color(1.0, 0.35, 0.35), 0.9)
+	visual.play(&"hurt")
 
 
 func _process_hurt(delta: float) -> void:
@@ -539,24 +580,29 @@ func _process_hurt(delta: float) -> void:
 	_apply_gravity(delta)
 	# 짧은 경직 뒤 복귀 (대시로 탈출 허용 → 답답함 완화)
 	if Input.is_action_just_pressed("player_dash") and _can_dash():
-		sprite.modulate = Color.WHITE
 		_start_dash()
 		return
 	if _action_time >= 0.24:
-		sprite.modulate = Color.WHITE
 		action = Action.NONE
+		visual.play(&"locomotion")
 
 
 func _on_died() -> void:
 	action = Action.DEAD
-	sprite.modulate = Color(0.5, 0.5, 0.6)
 	attack_hitbox.monitoring = false
-	parry_box.monitoring = false
+	attack_shape.scale = Vector2.ONE
 	hurtbox.invincible = true
-	GameFeel.hit_stop(0.18)
-	GameFeel.shake(0.7)
+	trail.visible = false
+	velocity = Vector2(-facing * 200.0, -260.0)
+	GameFeel.hit_stop(0.2)
+	GameFeel.shake(0.8)
+	GameFeel.flash(Color(1.0, 0.2, 0.25), 0.4, 0.4)
+	_sfx(sfx_death, 0.0)
+	_set_flash(Color(1.0, 0.3, 0.3), 1.0)
+	visual.play(&"dead")
+	health_changed.emit(0, health.max_hp)
 	died.emit()
-	_respawn_after(1.1)
+	_respawn_after(1.4)
 
 
 func _respawn_after(delay: float) -> void:
@@ -567,9 +613,12 @@ func _respawn_after(delay: float) -> void:
 	velocity = Vector2.ZERO
 	health.hp = health.max_hp
 	ult_charge = 0.0
-	sprite.modulate = Color.WHITE
 	action = Action.NONE
 	hurtbox.invincible = false
+	visual.rotation = 0.0
+	visual.play(&"locomotion")
+	_set_flash(Color(0.75, 0.55, 1.0), 1.0)
+	_spawn_parry_spark(global_position, 1.0)
 	health_changed.emit(health.hp, health.max_hp)
 	ultimate_changed.emit(ult_charge, ultimate_max)
 	ultimate_ready_changed.emit(false)
@@ -577,9 +626,9 @@ func _respawn_after(delay: float) -> void:
 
 # ─────────────────────────── 표시/연출 ───────────────────────────
 func _update_facing_from_input() -> void:
-	if action == Action.NONE or action == Action.ATTACK:
+	if action == Action.NONE:
 		var dir := _move_input()
-		if absf(dir) > 0.01 and action == Action.NONE:
+		if absf(dir) > 0.01:
 			facing = signf(dir)
 
 
@@ -587,10 +636,12 @@ func _update_visual(delta: float) -> void:
 	# 스쿼시&스트레치 완화
 	_squash = _squash.lerp(Vector2.ONE, 1.0 - exp(-14.0 * delta))
 
-	# 착지 스쿼시
+	# 착지 스쿼시 + 착지음
 	var on_floor := is_on_floor()
 	if on_floor and not _was_on_floor and velocity.y >= 0.0:
 		_squash = Vector2(1.3, 0.72)
+		if action != Action.DEAD:
+			_sfx(sfx_land, 0.08)
 	_was_on_floor = on_floor
 
 	# 달리기 바운스
@@ -602,9 +653,26 @@ func _update_visual(delta: float) -> void:
 		visual.position.y = lerp(visual.position.y, 0.0, 1.0 - exp(-14.0 * delta))
 
 	visual.scale = Vector2(facing * _squash.x, _squash.y)
-	# 속도에 따른 살짝의 기울임
-	var lean := clampf(velocity.x / run_speed, -1.0, 1.0) * 0.07
-	visual.rotation = lerp(visual.rotation, lean, 1.0 - exp(-12.0 * delta))
+	if action == Action.DEAD:
+		# 쓰러짐: 뒤로 넘어간다
+		visual.rotation = lerp(visual.rotation, -facing * 1.35, 1.0 - exp(-10.0 * delta))
+	else:
+		# 속도에 따른 살짝의 기울임
+		var lean := clampf(velocity.x / run_speed, -1.0, 1.0) * 0.07
+		visual.rotation = lerp(visual.rotation, lean, 1.0 - exp(-12.0 * delta))
+
+	visual.tick(delta, velocity, on_floor, run_speed)
+
+	# 번쩍임 감쇠
+	if _flash_amount > 0.0:
+		_flash_amount = maxf(_flash_amount - delta * 5.0, 0.0)
+		visual.set_flash(_flash_color, _flash_amount)
+
+
+func _set_flash(color: Color, amount: float) -> void:
+	_flash_color = color
+	_flash_amount = amount
+	visual.set_flash(color, amount)
 
 
 func _update_trail() -> void:
@@ -615,6 +683,15 @@ func _update_trail() -> void:
 	trail.add_point(global_position + Vector2(0.0, -8.0))
 	while trail.get_point_count() > 10:
 		trail.remove_point(0)
+
+
+func _on_footstep() -> void:
+	_sfx(sfx_step, 0.15)
+
+
+func _sfx(player: AudioStreamPlayer2D, pitch_var: float) -> void:
+	player.pitch_scale = randf_range(1.0 - pitch_var, 1.0 + pitch_var)
+	player.play()
 
 
 # ─────────────────────────── VFX 스폰 ───────────────────────────
@@ -641,28 +718,28 @@ func _spawn_spark(pos: Vector2, color: Color, count: int, spread: float, dir_deg
 	s.burst(color, count, spread, dir_deg, length)
 
 
-func _spawn_parry_spark(pos: Vector2) -> void:
+func _spawn_parry_spark(pos: Vector2, size_mul: float) -> void:
 	if spark_scene == null:
 		return
 	var s := spark_scene.instantiate() as SparkEffect
 	_fx_parent().add_child(s)
 	s.global_position = pos
-	s.burst(Color(0.8, 0.95, 1.0, 1.0), 14, 360.0, 0.0, 70.0, 0.3)
-	s.with_ring(Color(1.0, 1.0, 1.0, 1.0), 90.0)
+	s.burst(Color(0.8, 0.95, 1.0, 1.0), int(16 * size_mul), 360.0, 0.0, 78.0 * size_mul, 0.32)
+	s.with_ring(Color(1.0, 1.0, 1.0, 1.0), 100.0 * size_mul)
 
 
-func _spawn_parry_stance() -> void:
-	# 패링 창이 열릴 때 앞쪽에 청록 호를 띄워 "지금 패링 중"임을 보이게 한다.
+func _spawn_parry_stance(success: bool) -> void:
+	# 반격 자세: 앞쪽에 청록 호. 성공이면 크고 밝게, 헛반격이면 작고 흐리게.
 	if slash_scene == null:
 		return
 	var s := slash_scene.instantiate() as SlashEffect
-	s.color = Color(0.5, 0.9, 1.0, 0.75)
-	s.core_color = Color(0.85, 1.0, 1.0, 1.0)
-	s.arc_degrees = 150.0
-	s.lifetime = 0.22
+	s.color = Color(0.5, 0.9, 1.0, 0.85 if success else 0.35)
+	s.core_color = Color(0.9, 1.0, 1.0, 1.0 if success else 0.5)
+	s.arc_degrees = 160.0 if success else 110.0
+	s.lifetime = 0.26 if success else 0.16
 	_fx_parent().add_child(s)
 	s.global_position = global_position + Vector2(facing * 26.0, -10.0)
-	s.setup(facing, 0.0, 0.95)
+	s.setup(facing, -10.0, 1.25 if success else 0.8)
 
 
 func _spawn_afterimage() -> void:
@@ -670,5 +747,4 @@ func _spawn_afterimage() -> void:
 		return
 	var a := afterimage_scene.instantiate() as Afterimage
 	_fx_parent().add_child(a)
-	# global_transform에 이미 Visual의 좌우 반전이 포함되어 있으므로 flip_h는 끈다(이중 반전 방지).
-	a.setup(sprite.texture, sprite.global_transform, false, Color(0.7, 0.5, 1.0, 1.0))
+	a.setup_from_sprite(visual.body, Color(0.7, 0.5, 1.0, 1.0))

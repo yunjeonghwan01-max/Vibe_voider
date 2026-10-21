@@ -40,7 +40,7 @@ Godot 엔진의 실제 제약이 이 문서와 충돌하면 **엔진 제약이 �
 | `ui/` | 플레이어용 화면 UI (개발용 UI는 `toolkit/`) | `hud/`, `menus/`, `dialogue/`, `transitions/` |
 | `camera/` | Camera 자체와 공용 Camera 기능 (Rig, Shake, Follow, Limit 등) | — |
 | `managers/` | **게임 전체 범위**의 상태/흐름을 실제로 조율하는 고수준 관리자 (GameManager, SceneManager, SaveManager, AudioManager 등) | — |
-| `toolkit/` | 개발자용 기능 (플레이어용 UI 아님). `tool_*` 입력 액션과 대응 | `toolkit.tscn`, `toolkit.gd`, `debug_hud.gd` |
+| `toolkit/` | 개발자용 기능 (플레이어용 UI 아님). `tool_*` 입력 액션과 대응 | `toolkit.tscn`, `toolkit.gd`, `debug_hud.gd`, `asset_gen/` (오프라인 에셋 생성기) |
 | `core/` | 여러 영역이 공유하는 **저수준** 기반 | `physics/`, `state/`, `data/` |
 | `assets/` | 원본 Asset (이미지, 오디오, 폰트) | `characters/`, `environment/`, `effects/`, `audio/`, `fonts/`, `temporary/` |
 | `docs/` | 프로젝트 문서 (이 규칙서) | `structure.md` |
@@ -50,6 +50,7 @@ Godot 엔진의 실제 제약이 이 문서와 충돌하면 **엔진 제약이 �
 - `managers/`: `EnemyManager`, `DoorManager` 같은 객체별 Manager는 만들지 않는다. Manager는 `core/`가 아니다. Autoload로 등록할지는 실제 필요가 생길 때 결정한다.
 - `core/`: "어디 둘지 모르겠다"의 대피소가 아니다. **특정 객체에 속하지 않으며 실제로 여러 영역에서 공통 사용되는가?**에 "예"일 때만 둔다. 그래서 `utils/`는 만들지 않았다.
 - `assets/temporary/`: 임시/AI 생성/플레이스홀더 Asset을 정식 Asset과 섞지 않고 격리한다.
+  - Voider의 현재 픽셀아트와 사운드는 전부 코드로 생성한 것이라 여기 있다 (`characters/`, `environment/`, `audio/`). 생성기는 `toolkit/asset_gen/` (`sprite_gen.gd`, `audio_gen.gd`, 헤드리스 `--script`로 실행, 고정 seed). 외부 에셋이 아니므로 라이선스 문제가 없다. 정식 아트로 교체하면 해당 카테고리 폴더로 옮긴다.
 - `_scenes/`, `_scripts/`, `_resources/`처럼 **파일 형식으로 나누는 폴더**와 거대한 `systems/` 폴더는 만들지 않는다.
 
 ### 판단 기준
@@ -182,6 +183,7 @@ LevelRoot (Node2D)
 ├── Projectiles   런타임 투사체 Container
 ├── Effects       런타임 이펙트 Container
 ├── SpawnPoints   (필요할 때)
+├── Audio         레벨 배경 음악·환경음 (필요할 때)
 └── CameraPoints  (필요할 때)
 ```
 
@@ -202,34 +204,50 @@ Main (Node)
 
 ---
 
-## 5. 현재 실제 Scene Tree (Voider — 첫 플레이어블)
+## 5. 현재 실제 Scene Tree (Voider — 달빛 성소 한 방)
 
 ```text
 Main (Node)                                   app/main.tscn   (run/main_scene)
 ├── Arena (Node2D)                            levels/arena/arena.tscn   (arena.gd)
-│   ├── Sky (CanvasLayer, layer -100) └ BG(ColorRect)
-│   ├── World (Node2D)                        Hills / Ground / Walls / Plat1 / Plat2
+│   ├── World (Node2D)
+│   │   ├── SkyLayer (하늘+달, 시차 스크롤)     arena.gd가 카메라 x에 맞춰 느리게 움직인다
+│   │   ├── Backwall / MoonBeams / Banners / Dust / BrazierLeft·Right (world/props/brazier/)
+│   │   ├── Ground / LeftWall / RightWall      StaticBody2D: Visual(Sprite2D) + CollisionShape2D
+│   │   ├── LedgeLeft / LedgeRight / LedgeTop  one-way 발판
+│   │   └── Foreground (사슬, 시차 스크롤)
 │   ├── Actors (Node2D) └ Player              actors/player/player.tscn
 │   ├── Projectiles (Node2D)                  (런타임 투사체 — 아직 미사용)
 │   ├── Effects (Node2D, group "fx")          슬래시/스파크/잔상이 여기 붙는다
-│   ├── GameCamera (Camera2D)                 camera/game_camera.gd  (follow + lookahead + shake)
-│   └── Hud (CanvasLayer)                     ui/hud/hud.tscn  (체력 + 궁극기 바)
-└── Toolkit (CanvasLayer)                     toolkit/toolkit.tscn
+│   ├── GameCamera (Camera2D)                 camera/game_camera.gd  (follow + lookahead + shake + room_limits)
+│   ├── Vignette (CanvasLayer 1)              화면 가장자리 어둡게
+│   ├── Hud (CanvasLayer 2)                   ui/hud/hud.tscn  (초상화 + 체력/잔상 바 + 궁극기 바)
+│   └── Audio └ Music (AudioStreamPlayer)     루프 배경 음악
+└── Toolkit (CanvasLayer)                     toolkit/toolkit.tscn  (디버그 HUD는 기본 숨김, F1)
 
 Player (CharacterBody2D)                       actors/player/player.gd
-├── Visual (Node2D) └ Sprite2D                 좌우 반전/스쿼시는 Visual에서만
+├── Visual (Node2D, player_visual.gd)          좌우 반전/스쿼시는 Visual에서만. hit_flash 머티리얼
+│   ├── Body (Sprite2D, 9프레임 시트)           idle/run×4/jump/fall/hurt/dash
+│   └── Sword (Sprite2D)                       따로 회전하는 검 — 콤보/반격/대시/궁극기 자세
 ├── BodyCollision (CollisionShape2D)
 ├── Trail (Line2D, top_level)                  대시/궁극기 잔광
-└── Combat (Node2D)
-    ├── Health / Hurtbox(+CollisionShape2D)
-    ├── AttackHitbox(+CollisionShape2D)        콤보/궁극기 판정 (code로 on/off·크기·데미지)
-    └── ParryBox (Area2D)                      패링 창 동안 적 Hitbox 감지
+├── Combat (Node2D)
+│   ├── Health / Hurtbox(+CollisionShape2D)
+│   ├── AttackHitbox(+CollisionShape2D)        콤보/궁극기 판정 (code로 on/off·크기·데미지)
+│   └── ParryBox (Area2D, 항상 monitoring)      반격 키를 누른 순간 반짝이는 적 Hitbox를 읽는다
+└── Audio (AudioStreamPlayer2D들)
 
 Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/
-├── Visual (Node2D)                            Polygon2D 실루엣 (임시 아트, 플래시는 visual.modulate)
+├── Visual (Node2D, hit_flash 머티리얼 local_to_scene)
+│   ├── Body (Sprite2D, 9프레임 시트)
+│   └── Blade (Sprite2D)                        듀얼리스트만
 ├── BodyCollision (CollisionShape2D)
-└── Combat └ Health / Hurtbox / AttackHitbox
+├── Combat └ Health / Hurtbox / AttackHitbox
+└── Audio  Glint / Swing·Lunge / Death / Spawn
 ```
+
+- **반격(패링) 규칙**: 적의 모든 공격은 휘두르기 직전 `glint_duration`(0.4초) 동안 금빛으로 반짝인다 (`Enemy.begin_glint()/end_glint()/is_glinting()`, `combat/effects/glint/` 별빛 + glint 사운드). 플레이어가 그 순간 반격 키를 누르면 `ParryBox`에 겹친 반짝이는 적이 `on_parried()`로 경직된다. 반짝임이 없을 때 누르면 헛반격(무적 없음, 0.5초 재사용 대기 — 연타로는 못 맞춘다).
+- 번쩍임(피격/반짝임/경직)은 `combat/effects/hit_flash/hit_flash.gdshader`를 Visual에 두고 자식은 `use_parent_material`로 칠한다 (어두운 픽셀아트는 modulate로는 밝아지지 않는다).
+- 모든 아트는 "1 아트 픽셀 = 2px" 밀도이고 Sprite2D `scale = 2`로 쓴다. 프로젝트 기본 텍스처 필터는 Nearest.
 
 - `GameFeel` (Autoload, `managers/game_feel.gd`): `hit_stop(duration)` 프리즈 프레임(실시간 복구 타이머), `shake(trauma)`는 `GameCamera.current`로 전달.
 - 전투 손맛(hit-stop/shake/슬래시·스파크·잔상)은 명중·패링·사망 순간에 적용한다. VFX는 외부 이미지 없이 `_draw`로 그린다 (`combat/effects/slash|spark|afterimage/`).

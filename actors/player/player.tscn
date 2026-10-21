@@ -1,13 +1,36 @@
-[gd_scene load_steps=13 format=3 uid="uid://cplayervoider1"]
+[gd_scene load_steps=33 format=3 uid="uid://cplayervoider1"]
 
 [ext_resource type="Script" path="res://actors/player/player.gd" id="1_player"]
-[ext_resource type="Texture2D" uid="uid://cdb5faqq6v4dv" path="res://assets/characters/player/Voider Player01.png" id="2_tex"]
+[ext_resource type="Script" path="res://actors/player/player_visual.gd" id="2_visual"]
+[ext_resource type="Texture2D" path="res://assets/temporary/characters/player/player_body.png" id="2_body"]
+[ext_resource type="Texture2D" path="res://assets/temporary/characters/player/player_sword.png" id="2_sword"]
+[ext_resource type="Shader" path="res://combat/effects/hit_flash/hit_flash.gdshader" id="2_flash"]
 [ext_resource type="Script" path="res://combat/components/health/health.gd" id="3_health"]
 [ext_resource type="Script" path="res://combat/components/hurtbox/hurtbox.gd" id="4_hurt"]
 [ext_resource type="Script" path="res://combat/components/hitbox/hitbox.gd" id="5_hit"]
 [ext_resource type="PackedScene" path="res://combat/effects/slash/slash.tscn" id="6_slash"]
 [ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="7_spark"]
 [ext_resource type="PackedScene" path="res://combat/effects/afterimage/afterimage.tscn" id="8_after"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/swing_1.wav" id="a_swing1"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/swing_2.wav" id="a_swing2"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/swing_3.wav" id="a_swing3"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/hit.wav" id="a_hit"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/hit_heavy.wav" id="a_hit_heavy"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/parry.wav" id="a_parry"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/parry_whiff.wav" id="a_whiff"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/jump.wav" id="a_jump"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/land.wav" id="a_land"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/step.wav" id="a_step"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/player_hurt.wav" id="a_hurt"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/player_death.wav" id="a_death"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/ult_cast.wav" id="a_ult_cast"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/ult_hit.wav" id="a_ult_hit"]
+
+[sub_resource type="ShaderMaterial" id="Mat_flash"]
+shader = ExtResource("2_flash")
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+shader_parameter/flash = 0.0
 
 [sub_resource type="CapsuleShape2D" id="Cap_body"]
 radius = 15.0
@@ -21,9 +44,10 @@ height = 50.0
 radius = 36.0
 
 [sub_resource type="CircleShape2D" id="Circ_parry"]
-radius = 42.0
+radius = 72.0
 
 [node name="Player" type="CharacterBody2D"]
+z_index = 2
 collision_layer = 2
 collision_mask = 1
 script = ExtResource("1_player")
@@ -32,11 +56,26 @@ spark_scene = ExtResource("7_spark")
 afterimage_scene = ExtResource("8_after")
 
 [node name="Visual" type="Node2D" parent="."]
+material = SubResource("Mat_flash")
+script = ExtResource("2_visual")
 
-[node name="Sprite2D" type="Sprite2D" parent="Visual"]
-position = Vector2(0, -4)
-scale = Vector2(0.055, 0.055)
-texture = ExtResource("2_tex")
+[node name="Body" type="Sprite2D" parent="Visual"]
+use_parent_material = true
+position = Vector2(0, 27)
+scale = Vector2(2, 2)
+texture = ExtResource("2_body")
+centered = false
+offset = Vector2(-20, -41)
+hframes = 9
+
+[node name="Sword" type="Sprite2D" parent="Visual"]
+use_parent_material = true
+position = Vector2(13, 12)
+rotation = 0.38
+scale = Vector2(2, 2)
+texture = ExtResource("2_sword")
+centered = false
+offset = Vector2(-2, -3)
 
 [node name="BodyCollision" type="CollisionShape2D" parent="."]
 shape = SubResource("Cap_body")
@@ -78,11 +117,79 @@ damage = 10
 shape = SubResource("Circ_attack")
 
 [node name="ParryBox" type="Area2D" parent="Combat"]
-position = Vector2(30, -8)
+position = Vector2(0, -8)
 collision_layer = 0
 collision_mask = 64
-monitoring = false
 monitorable = false
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/ParryBox"]
 shape = SubResource("Circ_parry")
+
+[node name="Audio" type="Node2D" parent="."]
+
+[node name="Swing1" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_swing1")
+volume_db = -8.0
+max_polyphony = 2
+
+[node name="Swing2" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_swing2")
+volume_db = -8.0
+max_polyphony = 2
+
+[node name="Swing3" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_swing3")
+volume_db = -6.0
+max_polyphony = 2
+
+[node name="Hit" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_hit")
+volume_db = -3.0
+max_polyphony = 4
+
+[node name="HitHeavy" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_hit_heavy")
+volume_db = -2.0
+max_polyphony = 3
+
+[node name="Parry" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_parry")
+max_polyphony = 2
+
+[node name="ParryWhiff" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_whiff")
+volume_db = -9.0
+
+[node name="Dash" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_dash")
+volume_db = -9.0
+
+[node name="Jump" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_jump")
+volume_db = -13.0
+
+[node name="Land" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_land")
+volume_db = -12.0
+
+[node name="Step" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_step")
+volume_db = -19.0
+max_polyphony = 2
+
+[node name="Hurt" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_hurt")
+volume_db = -3.0
+
+[node name="Death" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_death")
+volume_db = -2.0
+
+[node name="UltCast" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_ult_cast")
+volume_db = -3.0
+
+[node name="UltHit" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_ult_hit")
+volume_db = -4.0
+max_polyphony = 3

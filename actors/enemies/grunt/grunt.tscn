@@ -1,17 +1,30 @@
-[gd_scene load_steps=9 format=3 uid="uid://cgruntvoider01"]
+[gd_scene load_steps=17 format=3 uid="uid://cgruntvoider01"]
 
 [ext_resource type="Script" path="res://actors/enemies/grunt/grunt.gd" id="1_grunt"]
 [ext_resource type="Script" path="res://combat/components/health/health.gd" id="2_health"]
 [ext_resource type="Script" path="res://combat/components/hurtbox/hurtbox.gd" id="3_hurt"]
 [ext_resource type="Script" path="res://combat/components/hitbox/hitbox.gd" id="4_hit"]
 [ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="5_spark"]
+[ext_resource type="PackedScene" path="res://combat/effects/glint/glint.tscn" id="6_glint"]
+[ext_resource type="Shader" path="res://combat/effects/hit_flash/hit_flash.gdshader" id="7_flash"]
+[ext_resource type="Texture2D" path="res://assets/temporary/characters/grunt/grunt.png" id="8_tex"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/glint.wav" id="a_glint"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/grunt_lunge.wav" id="a_lunge"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/enemy_death.wav" id="a_death"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/spawn.wav" id="a_spawn"]
+
+[sub_resource type="ShaderMaterial" id="Mat_flash"]
+resource_local_to_scene = true
+shader = ExtResource("7_flash")
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+shader_parameter/flash = 0.0
 
 [sub_resource type="CapsuleShape2D" id="Cap_body"]
 radius = 13.0
 height = 30.0
 
 [sub_resource type="CircleShape2D" id="Circ_hurt"]
-radius = 19.0
+radius = 20.0
 
 [sub_resource type="CircleShape2D" id="Circ_attack"]
 radius = 22.0
@@ -20,24 +33,21 @@ radius = 22.0
 collision_layer = 4
 collision_mask = 1
 script = ExtResource("1_grunt")
-move_speed = 150.0
+move_speed = 165.0
 spark_scene = ExtResource("5_spark")
+glint_scene = ExtResource("6_glint")
 
 [node name="Visual" type="Node2D" parent="."]
+material = SubResource("Mat_flash")
 
-[node name="Body" type="Polygon2D" parent="Visual"]
-color = Color(0.13, 0.1, 0.17, 1)
-polygon = PackedVector2Array(0, -20, 13, -14, 18, -2, 16, 10, 8, 16, 0, 17, -8, 16, -16, 10, -18, -2, -13, -14)
-
-[node name="EyeL" type="Polygon2D" parent="Visual"]
-position = Vector2(-7, -6)
-color = Color(1, 0.82, 0.12, 1)
-polygon = PackedVector2Array(0, -4, 3, 0, 0, 4, -3, 0)
-
-[node name="EyeR" type="Polygon2D" parent="Visual"]
-position = Vector2(6, -6)
-color = Color(1, 0.82, 0.12, 1)
-polygon = PackedVector2Array(0, -4, 3, 0, 0, 4, -3, 0)
+[node name="Body" type="Sprite2D" parent="Visual"]
+use_parent_material = true
+position = Vector2(0, 15)
+scale = Vector2(2, 2)
+texture = ExtResource("8_tex")
+centered = false
+offset = Vector2(-15, -25)
+hframes = 9
 
 [node name="BodyCollision" type="CollisionShape2D" parent="."]
 shape = SubResource("Cap_body")
@@ -46,7 +56,7 @@ shape = SubResource("Cap_body")
 
 [node name="Health" type="Node" parent="Combat"]
 script = ExtResource("2_health")
-max_hp = 24
+max_hp = 36
 
 [node name="Hurtbox" type="Area2D" parent="Combat"]
 collision_layer = 16
@@ -64,7 +74,26 @@ collision_layer = 64
 collision_mask = 8
 monitoring = false
 script = ExtResource("4_hit")
-damage = 8
+damage = 10
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/AttackHitbox"]
 shape = SubResource("Circ_attack")
+
+[node name="Audio" type="Node2D" parent="."]
+
+[node name="Glint" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_glint")
+volume_db = -3.0
+max_distance = 1600.0
+
+[node name="Lunge" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_lunge")
+volume_db = -8.0
+
+[node name="Death" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_death")
+volume_db = -6.0
+
+[node name="Spawn" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_spawn")
+volume_db = -12.0

@@ -1,6 +1,13 @@
-[gd_scene load_steps=2 format=3 uid="uid://bafterimg00001"]
+[gd_scene load_steps=4 format=3 uid="uid://bafterimg00001"]
 
 [ext_resource type="Script" path="res://combat/effects/afterimage/afterimage.gd" id="1_after"]
+[ext_resource type="Shader" path="res://combat/effects/hit_flash/hit_flash.gdshader" id="2_flash"]
+
+[sub_resource type="ShaderMaterial" id="Mat_tint"]
+shader = ExtResource("2_flash")
+shader_parameter/flash_color = Color(0.62, 0.42, 1, 1)
+shader_parameter/flash = 0.8
 
 [node name="Afterimage" type="Sprite2D"]
+material = SubResource("Mat_tint")
 script = ExtResource("1_after")

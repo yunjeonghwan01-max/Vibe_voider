@@ -12,6 +12,9 @@ static var current: GameCamera = null
 @export var look_ahead: float = 60.0
 @export var look_ahead_lerp: float = 3.0
 @export var vertical_offset: float = -24.0
+## 방 경계: 이 사각형 바깥이 화면에 보이지 않도록 카메라 중심을 가둔다(크기 0이면 사용 안 함).
+## Camera2D limit와 달리 흔들림(offset)은 가두지 않아, 경계에 붙어 있어도 흔들림이 온전히 보인다.
+@export var room_limits: Rect2 = Rect2()
 
 @export_group("Shake")
 @export var max_shake_offset: float = 18.0
@@ -28,7 +31,7 @@ func _ready() -> void:
 	make_current()
 	_noise_seed = randf() * 1000.0
 	if target != null:
-		global_position = target.global_position + Vector2(0.0, vertical_offset)
+		global_position = _clamp_to_room(target.global_position + Vector2(0.0, vertical_offset))
 
 
 func _exit_tree() -> void:
@@ -45,7 +48,7 @@ func _physics_process(delta: float) -> void:
 		var facing := 1.0 if target.get("facing") == null else float(target.facing)
 		var desired_look := facing * look_ahead
 		_look = lerp(_look, desired_look, 1.0 - exp(-look_ahead_lerp * delta))
-		var desired := target.global_position + Vector2(_look, vertical_offset)
+		var desired := _clamp_to_room(target.global_position + Vector2(_look, vertical_offset))
 		global_position = global_position.lerp(desired, 1.0 - exp(-follow_lerp * delta))
 
 	# 흔들림: trauma^2 로 변환해 부드럽게 들어오고 빠르게 빠진다.
@@ -61,6 +64,22 @@ func _physics_process(delta: float) -> void:
 	elif offset != Vector2.ZERO or rotation != 0.0:
 		offset = Vector2.ZERO
 		rotation = 0.0
+
+
+func _clamp_to_room(p: Vector2) -> Vector2:
+	if not room_limits.has_area():
+		return p
+	var half := get_viewport_rect().size * 0.5 / zoom
+	var c := room_limits.get_center()
+	if half.x * 2.0 >= room_limits.size.x:
+		p.x = c.x
+	else:
+		p.x = clampf(p.x, room_limits.position.x + half.x, room_limits.end.x - half.x)
+	if half.y * 2.0 >= room_limits.size.y:
+		p.y = c.y
+	else:
+		p.y = clampf(p.y, room_limits.position.y + half.y, room_limits.end.y - half.y)
+	return p
 
 
 ## -1..1 범위의 의사 난수 (시간 기반, sin 합성). 외부 노이즈 리소스 없이 떨림을 만든다.
