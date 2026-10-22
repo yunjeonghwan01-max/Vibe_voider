@@ -54,6 +54,9 @@ func _init() -> void:
 	_save("lightning", _lightning(), SR)
 	_save("dash_slash_ring", _dash_slash_ring(), SR)
 	_save("dash_slash_hit", _dash_slash_hit(), SR)
+	_save("haki_burst", _haki_burst(), SR)
+	_save("moon_slash_fly", _moon_slash_fly(), SR)
+	_save("moon_slash_burst", _moon_slash_burst(), SR)
 	print("[audio_gen] done")
 	quit()
 
@@ -746,3 +749,95 @@ func _dash_slash_hit() -> PackedFloat32Array:
 		var thump := sin(phase) * exp(-t * 13.0) * 1.1
 		b[i] = (crack + tear + clink + thump) * minf(t / 0.0015, 1.0)
 	return _normalize(b, 0.92)
+
+
+# ═══════════════════════════════ 패기 방출 ═══════════════════════════════
+## 패기 방출 (2초): 0.28초 동안 짓눌리는 압력(낮게 떨리며 차오름) → "쩌억!" 깨지는 파열음 + 땅 울리는 저음 +
+## 지직거리는 검은 번개 + 으르렁거리는 왜곡음이 길게 남는다. 방출 시점(0.28초)은 haki_burst.gd의 RELEASE_AT과 맞춘다.
+func _haki_burst() -> PackedFloat32Array:
+	var dur := 2.0
+	var rel := 0.28
+	var b := _buf(dur)
+	var st := SVF.new()
+	var st2 := SVF.new()
+	var st3 := SVF.new()
+	var p_low := 0.0
+	var p_growl := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var s := 0.0
+		if t < rel:
+			var u := t / rel
+			p_low += TAU * (38.0 + 30.0 * u) / SR
+			var trem := 0.6 + 0.4 * sin(t * TAU * (6.0 + 30.0 * u))
+			s += sin(p_low) * trem * u * 0.9
+			s += st.run(_n(), 200.0 + 1200.0 * u * u, 0.6).low * u * u * 1.2
+		else:
+			var v := t - rel
+			var shatter := st2.run(_n(), 5000.0, 0.4).high * exp(-v * 26.0) * 2.0
+			var glass := 0.0
+			for k in 5:
+				glass += sin(TAU * (3100.0 + k * 1270.0) * v) * exp(-v * (30.0 + k * 9.0))
+			p_low += TAU * (30.0 + 70.0 * exp(-v * 9.0)) / SR
+			var boom := sin(p_low) * exp(-v * 2.6) * 1.6
+			var crackle := 0.0
+			if rng.randf() < 0.06 * exp(-v * 1.8):
+				crackle = _n() * 1.2 * exp(-v * 1.5)
+			p_growl += TAU * 52.0 / SR
+			var growl := tanh(3.0 * sin(p_growl) + st3.run(_n(), 300.0, 0.7).low * 4.0) * exp(-v * 2.4) * 0.45
+			s += shatter + glass * 0.35 + boom + crackle + growl
+		b[i] = s
+	return _normalize(b, 0.95)
+
+
+# ═══════════════════════════════ 궁극기: 월아 참격 ═══════════════════════════════
+## 날아가는 반달 참격: 처음엔 낮고 느린 바람이 점점 빨라지며 높아진다 (지수 가속과 맞춤) + 낮게 깔린 울림.
+func _moon_slash_fly() -> PackedFloat32Array:
+	var dur := 1.1
+	var b := _buf(dur)
+	var st := SVF.new()
+	var phase := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var g := minf(exp(t * 3.4) - 1.0, 25.0) / 25.0          # 0 → 1 지수 상승
+		var env := minf(t / 0.03, 1.0) * (0.35 + 0.65 * g) * minf((dur - t) / 0.15, 1.0)
+		var wind := st.run(_n(), 300.0 + 5200.0 * g, 0.5).band
+		phase += TAU * (70.0 + 260.0 * g) / SR
+		var hum := (sin(phase) + 0.4 * sin(phase * 2.0)) * 0.35
+		b[i] = (wind + hum) * env
+	return _normalize(b, 0.8)
+
+
+## 참격이 깨지는 소리: 0.32초 동안 빨라지는 회오리 바람 → "콰앙!" 폭발 + 위로 솟는 바람 + 파편.
+## 폭발 시점(0.32초)은 moon_slash.gd의 vortex_time과 맞춘다.
+func _moon_slash_burst() -> PackedFloat32Array:
+	var dur := 1.6
+	var rel := 0.32
+	var b := _buf(dur)
+	var st := SVF.new()
+	var st2 := SVF.new()
+	var st3 := SVF.new()
+	var lfo := 0.0
+	var p_boom := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var s := 0.0
+		# 깨짐 "챙" (처음 순간)
+		s += st3.run(_n(), 4500.0, 0.4).high * exp(-t * 40.0) * 1.2
+		if t < rel + 0.1:
+			var u := minf(t / rel, 1.0)
+			lfo += TAU * (4.0 + 26.0 * u) / SR
+			var swirl := st.run(_n(), 700.0 + 900.0 * sin(lfo) + 1600.0 * u, 0.35).band
+			s += swirl * (0.3 + 0.9 * u) * (1.0 if t < rel else maxf(1.0 - (t - rel) / 0.1, 0.0))
+		if t >= rel:
+			var v := t - rel
+			p_boom += TAU * (34.0 + 120.0 * exp(-v * 12.0)) / SR
+			var boom := sin(p_boom) * exp(-v * 3.0) * 1.8
+			var crack := _n() * exp(-v * 45.0) * 1.4
+			var rise := st2.run(_n(), 600.0 + 4000.0 * minf(v / 0.4, 1.0), 0.5).band * exp(-v * 3.5) * 1.1
+			var debris := 0.0
+			if rng.randf() < 0.04 * exp(-v * 2.5):
+				debris = _n() * 0.8
+			s += boom + crack + rise + debris
+		b[i] = s
+	return _normalize(b, 0.95)

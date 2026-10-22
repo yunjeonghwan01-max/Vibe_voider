@@ -1,0 +1,63 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://actors/player/abilities/moon_slash/moon_slash.gd" id="1_moon"]
+[ext_resource type="Script" path="res://combat/components/hitbox/hitbox.gd" id="2_hit"]
+[ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="3_spark"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/moon_slash_fly.wav" id="a_fly"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/moon_slash_burst.wav" id="a_burst"]
+
+[sub_resource type="CapsuleShape2D" id="Cap_body"]
+radius = 44.0
+height = 250.0
+
+[sub_resource type="RectangleShape2D" id="Rect_burst"]
+size = Vector2(340, 540)
+
+[sub_resource type="CircleShape2D" id="Circ_wall"]
+radius = 12.0
+
+[node name="MoonSlash" type="Node2D"]
+z_index = 5
+script = ExtResource("1_moon")
+spark_scene = ExtResource("3_spark")
+
+[node name="Body" type="Area2D" parent="."]
+collision_layer = 32
+collision_mask = 16
+script = ExtResource("2_hit")
+damage = 20
+apply_on_contact = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Body"]
+position = Vector2(92, 0)
+shape = SubResource("Cap_body")
+
+[node name="Burst" type="Area2D" parent="."]
+collision_layer = 32
+collision_mask = 16
+monitoring = false
+script = ExtResource("2_hit")
+damage = 40
+apply_on_contact = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Burst"]
+position = Vector2(0, -200)
+shape = SubResource("Rect_burst")
+
+[node name="Collision" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collision"]
+position = Vector2(100, 0)
+shape = SubResource("Circ_wall")
+
+[node name="Audio" type="Node2D" parent="."]
+
+[node name="Fly" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_fly")
+max_distance = 3000.0
+
+[node name="Burst" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_burst")
+max_distance = 3000.0

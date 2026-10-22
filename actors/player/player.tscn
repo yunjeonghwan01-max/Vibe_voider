@@ -16,13 +16,15 @@
 [ext_resource type="Script" uid="uid://ddhui8cfgt60e" path="res://actors/player/abilities/dash_slash/dash_slash_ability.gd" id="11_ds_ability"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/dash_slash/dash_slash_effect.tscn" id="12_ds_fx"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/counter_slash/counter_slash.tscn" id="13_counter"]
-[ext_resource type="Script" path="res://actors/player/abilities/lightning/lightning_ability.gd" id="14_lightning"]
+[ext_resource type="Script" uid="uid://c38qqiperccge" path="res://actors/player/abilities/lightning/lightning_ability.gd" id="14_lightning"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/lightning/lightning_bolt.tscn" id="15_bolt"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/dash_slash_ring.wav" id="a_ds_ring"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/dash_slash_hit.wav" id="a_ds_hit"]
+[ext_resource type="PackedScene" path="res://actors/player/abilities/haki/haki_burst.tscn" id="16_haki"]
+[ext_resource type="PackedScene" path="res://actors/player/abilities/moon_slash/moon_slash.tscn" id="17_moon"]
 [ext_resource type="AudioStream" uid="uid://cnlltvsiboews" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
 [ext_resource type="AudioStream" uid="uid://dcixlbk3lyuvs" path="res://assets/temporary/audio/dash_slash.wav" id="a_dash_slash"]
 [ext_resource type="AudioStream" uid="uid://f51u2c8am6r2" path="res://assets/temporary/audio/player_death.wav" id="a_death"]
+[ext_resource type="AudioStream" uid="uid://bqw0w0s8lenju" path="res://assets/temporary/audio/dash_slash_hit.wav" id="a_ds_hit"]
+[ext_resource type="AudioStream" uid="uid://wyifkw2ci54o" path="res://assets/temporary/audio/dash_slash_ring.wav" id="a_ds_ring"]
 [ext_resource type="AudioStream" uid="uid://dal1g825ak5rk" path="res://assets/temporary/audio/hit.wav" id="a_hit"]
 [ext_resource type="AudioStream" uid="uid://cg05h14a0h1lu" path="res://assets/temporary/audio/hit_heavy.wav" id="a_hit_heavy"]
 [ext_resource type="AudioStream" uid="uid://by35rek6m3idb" path="res://assets/temporary/audio/player_hurt.wav" id="a_hurt"]
@@ -68,6 +70,8 @@ slash_scene = ExtResource("6_slash")
 spark_scene = ExtResource("7_spark")
 afterimage_scene = ExtResource("8_after")
 counter_slash_scene = ExtResource("13_counter")
+haki_scene = ExtResource("16_haki")
+moon_slash_scene = ExtResource("17_moon")
 
 [node name="Visual" type="Node2D" parent="." unique_id=1009679064]
 material = SubResource("Mat_flash")
@@ -158,7 +162,7 @@ damage = 15
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/DashSlash/Hitbox" unique_id=1333878218]
 shape = SubResource("Rect_dash_slash")
 
-[node name="Lightning" type="Node2D" parent="Combat"]
+[node name="Lightning" type="Node2D" parent="Combat" unique_id=1169862715]
 script = ExtResource("14_lightning")
 bolt_scene = ExtResource("15_bolt")
 
@@ -241,12 +245,12 @@ stream = ExtResource("a_dash_slash")
 volume_db = -5.0
 max_polyphony = 2
 
-[node name="DashSlashRing" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="DashSlashRing" type="AudioStreamPlayer2D" parent="Audio" unique_id=1263307946]
 stream = ExtResource("a_ds_ring")
 volume_db = -4.0
 max_polyphony = 2
 
-[node name="DashSlashHit" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="DashSlashHit" type="AudioStreamPlayer2D" parent="Audio" unique_id=435619326]
 stream = ExtResource("a_ds_hit")
 volume_db = -1.0
 max_polyphony = 3

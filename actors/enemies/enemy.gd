@@ -10,6 +10,9 @@ extends CharacterBody2D
 ##   하위 클래스가 공격 단계에서 begin_glint() / end_glint()로 구간을 연다/닫는다.
 ##
 ## 피격은 Combat/Health, Combat/Hurtbox 시그널로만 받는다 (take_damage를 직접 갖지 않는다).
+##
+## 에어본(띄우기): 위쪽 넉백이 LAUNCH_THRESHOLD보다 강한 피격(궁극기 등)은 적을 띄우고, 착지할 때까지
+##   HITSTUN을 유지한다 (날아다니는 적은 MAX_AIRBORNE 뒤 풀린다). 슈퍼아머 중에는 띄워지지 않는다.
 
 signal defeated(enemy: Enemy)
 
@@ -18,6 +21,8 @@ enum State { SPAWNING, ACTIVE, HITSTUN, STAGGER, DEAD }
 const GLINT_COLOR := Color(1.0, 0.93, 0.58)
 const HIT_COLOR := Color(1.0, 0.42, 0.42)
 const STAGGER_COLOR := Color(0.45, 0.9, 1.0)
+const LAUNCH_THRESHOLD := -400.0   # 이보다 강한 위쪽 넉백 = 띄우기
+const MAX_AIRBORNE := 1.4
 
 @export_group("Body")
 @export var gravity: float = 1400.0
@@ -57,6 +62,8 @@ var _glint_t: float = 0.0
 var _glint_fx: Node2D = null
 var _flash_amount: float = 0.0
 var _flash_col: Color = Color.WHITE
+var _airborne: bool = false
+var _air_t: float = 0.0
 
 
 func _ready() -> void:
@@ -92,11 +99,14 @@ func _physics_process(delta: float) -> void:
 				hurtbox.invincible = false
 		State.HITSTUN:
 			_state_timer -= delta
+			if _airborne:
+				_air_t += delta
 			if is_on_floor():
 				velocity.x = move_toward(velocity.x, 0.0, move_speed * 6.0 * delta)
 			_apply_gravity(delta)
-			if _state_timer <= 0.0:
+			if _state_timer <= 0.0 and _airborne_over():
 				state = State.ACTIVE
+				_airborne = false
 		State.STAGGER:
 			_state_timer -= delta
 			if is_on_floor():
@@ -104,6 +114,7 @@ func _physics_process(delta: float) -> void:
 			_apply_gravity(delta)
 			if _state_timer <= 0.0:
 				state = State.ACTIVE
+				_airborne = false
 				_on_stagger_end()
 		_:
 			_enemy_ai(delta)
@@ -243,7 +254,15 @@ func _on_hit_received(_damage: int, source: Node, knockback: Vector2) -> void:
 	if state != State.STAGGER:
 		state = State.HITSTUN
 		_state_timer = hitstun_time
+	if knockback.y <= LAUNCH_THRESHOLD:
+		_airborne = true                 # 띄워졌다 — 착지할 때까지 경직
+		_air_t = 0.0
 	_on_hurt(source)
+
+
+## 띄워진 상태가 끝났는가: 띄워지지 않았거나, 떠오른 뒤 다시 땅을 밟았거나, 너무 오래 떠 있었다.
+func _airborne_over() -> bool:
+	return not _airborne or (_air_t > 0.15 and is_on_floor()) or _air_t >= MAX_AIRBORNE
 
 
 ## 하위 클래스 피격 훅 (슈퍼아머로 버틴 피격에는 호출되지 않는다).
@@ -339,6 +358,9 @@ func _update_visual(delta: float) -> void:
 	visual.scale = Vector2(mag.x * sgn, mag.y)
 	# 반짝이는 동안은 힘을 모으듯 미세하게 떤다.
 	visual.position.x = randf_range(-1.0, 1.0) if _glinting else 0.0
+	# 띄워진 동안은 몸이 뒤로 젖혀져 빙글 기운다
+	var tilt := -0.5 * signf(facing) if _airborne and state == State.HITSTUN else 0.0
+	visual.rotation = lerpf(visual.rotation, tilt, 1.0 - exp(-12.0 * delta))
 
 
 func _sfx(player: AudioStreamPlayer2D, pitch_var: float) -> void:

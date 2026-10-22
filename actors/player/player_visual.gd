@@ -20,6 +20,7 @@ const KEYS := {
 	&"cast": [[0.0, -70.0], [0.05, -95.0], [0.1, -8.0], [0.26, 6.0]],
 	&"dash_slash": [[0.0, 168.0], [0.03, 176.0], [0.12, -4.0], [0.28, 8.0]],
 	&"cast_up": [[0.0, -30.0], [0.06, -105.0], [0.15, -92.0], [0.35, -86.0]],
+	&"ult_cast": [[0.0, -120.0], [0.12, -178.0], [0.2, 40.0], [0.5, 28.0]],
 	&"dash": [[0.0, 120.0], [0.06, 172.0]],
 	&"hurt": [[0.0, 60.0], [0.1, 100.0]],
 	&"dead": [[0.0, 90.0], [0.3, 115.0]],
@@ -92,10 +93,11 @@ func tick(delta: float, vel: Vector2, on_floor: bool, run_speed: float) -> void:
 			target = _keyed(KEYS[anim], _t)
 			snap = true
 			frame_i = Frame.DASH if _t < 0.2 else Frame.IDLE
-		&"ultimate":
-			target = -90.0 + 1080.0 * (1.0 - pow(1.0 - clampf(_t / 0.4, 0.0, 1.0), 2.0))
+		&"ult_cast":
+			# 월아 참격: 검을 머리 뒤로 크게 치켜들었다가 앞으로 내려 벤다
+			target = _keyed(KEYS[anim], _t)
 			snap = true
-			frame_i = Frame.DASH
+			frame_i = Frame.DASH if _t >= 0.12 and _t < 0.32 else Frame.IDLE
 		&"dash":
 			target = _keyed(KEYS[anim], _t)
 			snap = true

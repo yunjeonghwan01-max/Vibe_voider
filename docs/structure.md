@@ -233,7 +233,7 @@ Player (CharacterBody2D)                       actors/player/player.gd
 ├── Trail (Line2D, top_level)                  대시/궁극기 잔광
 ├── Combat (Node2D)
 │   ├── Health / Hurtbox(+CollisionShape2D)
-│   ├── AttackHitbox(+CollisionShape2D)        콤보/궁극기 판정 (code로 on/off·크기·데미지)
+│   ├── AttackHitbox(+CollisionShape2D)        콤보 판정 (code로 on/off·데미지)
 │   ├── ParryBox (Area2D, 항상 monitoring)      반격 키를 누른 순간 반짝이는 적 Hitbox를 읽는다
 │   ├── VoidOrb (Node2D, VoidOrbAbility)        스킬(E) 장풍: 쿨다운 + 구체 스폰 (abilities/void_orb/)
 │   └── DashSlash (Node2D, DashSlashAbility)    대시+E 대시 참격: 쿨다운 + Hitbox(긴 사각형) + 궤적 (abilities/dash_slash/)
@@ -251,12 +251,13 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
 
 - **반격(패링) 규칙**: 적의 모든 공격은 휘두르기 직전 `glint_duration`(0.4초) 동안 금빛으로 반짝인다 (`Enemy.begin_glint()/end_glint()/is_glinting()`, `combat/effects/glint/` 별빛 + glint 사운드). 플레이어가 그 순간 반격 키를 누르면 `ParryBox`에 겹친 반짝이는 적이 `on_parried()`로 경직된다. 반짝임이 없을 때 누르면 헛반격(무적 없음, 0.5초 재사용 대기 — 연타로는 못 맞춘다).
 - **연쇄 반격**: 반격(근접 반짝임/카유공)에 성공하면 `chain_window`(0.2초, 게임 시간 — 반격 연출의 hit-stop 동안 줄지 않음) 동안 반격 키를 다시 누를 수 있다. 누르면 "예약"되어 창이 끝날 때까지 유효하고, 그 사이 반짝임/카유공이 생기면 자동으로 받아친다(받아칠 때마다 창이 다시 열려 계속 이어짐, 반격음이 점점 높아진다). 끝까지 대상이 없으면 헛반격 페널티 없이 끝난다. 예약 입력은 `player.gd`의 `_process`에서 읽어 hit-stop 중에도 놓치지 않는다. 처음 성공시킨 그 입력으로는 예약되지 않는다.
+- **패기 방출**(`actors/player/abilities/haki/`, `HakiBurst`): 연쇄 반격이 `haki_every`(3)번째로 이어질 때마다(3·6·9…) 발동. 반격 연출 뒤에 스폰해 슬로모션이 덮이지 않게 한다. 화면을 덮지 않는 노바: 0.28초 모으기(플레이어 주변 핏빛 고리가 조여듦) → 방출(짧은 검붉은 번개 화살 32개가 한꺼번에 사방으로 + 같은 속도의 얇은 충격파 고리). 카메라 화면 안의 모든 적(그룹 `enemy`)이 고리가 닿는 순간 `receive_hit(haki_damage=15)`, 맞은 자리에서 작은 번개가 지직거린다. 궁극기 게이지 +50. 연출은 실제 시간으로 흐른다.
 - 번쩍임(피격/반짝임/경직)은 `combat/effects/hit_flash/hit_flash.gdshader`를 Visual에 두고 자식은 `use_parent_material`로 칠한다 (어두운 픽셀아트는 modulate로는 밝아지지 않는다).
 - 모든 아트는 "1 아트 픽셀 = 2px" 밀도이고 Sprite2D `scale = 2`로 쓴다. 프로젝트 기본 텍스처 필터는 Nearest.
 
 - `GameFeel` (Autoload, `managers/game_feel.gd`): `hit_stop(duration)` 프리즈 프레임(실시간 복구 타이머), `shake(trauma)`는 `GameCamera.current`로 전달.
 - 전투 손맛(hit-stop/shake/슬래시·스파크·잔상)은 명중·패링·사망 순간에 적용한다. VFX는 외부 이미지 없이 `_draw`로 그린다 (`combat/effects/slash|spark|afterimage/`).
-- 입력 액션(추가분): `player_jump`(Space만) `player_attack` `player_parry` `player_dash` `player_skill`(E) `player_ultimate` + `player_move_left/right`에 A/D 추가, `player_move_up`(↑/W)은 "위 방향" 수식키(위+E = 벼락). W/↑는 점프가 아니다.
+- 입력 액션(추가분): `player_jump`(Space만) `player_attack` `player_parry` `player_dash` `player_skill`(E) `player_ultimate` + `player_move_left/right`에 A/D 추가, `player_move_up`(↑/W)은 "위 방향" 수식키(위+E = 벼락). W/↑는 점프가 아니다. 점프는 공중에서 한 번 더 할 수 있다(더블 점프, `air_jumps` 1회, 착지 시 충전, 발밑 보랏빛 고리).
 - `Toolkit` (`toolkit.gd`): `tool_toggle_hud` / `tool_restart` / `tool_pause`.
 - **카유공(카운터 유도 공격)** — 감시자(`actors/enemies/watcher/`, 공중 원거리 중간 보스급 적 — 금장 갑각·가시 왕관·후광·칼날깃 날개, 잡몹보다 크다):
   - 평소: 플레이어 위쪽 옆(`hover_distance`/`hover_height`)을 떠다니며 바늘(`watcher_needle.gd/.tscn`, 반격 불가)을 쏜다. 날아다니므로 `_apply_gravity`를 감속으로 오버라이드하고 몸은 지형과 충돌하지 않는다(mask 0, `fly_bounds` 안에 머문다 — 레벨이 스폰 때 지정).
@@ -265,14 +266,16 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
   - 반격: `Enemy.is_counter_open()` / `Enemy.on_countered(from_pos)` (기본은 없음 — 감시자가 오버라이드)와 그룹 `counter_threat`. 플레이어가 반격 키를 누르면 ParryBox의 반짝이는 근접 공격을 먼저 처리하고, 그게 없을 때만 열린 카유공을 **방향·거리 무관**하게 받아친다 (= 다른 적 반격에 쓴 입력으로는 광선을 막지 못한다).
   - 반격 성공 → `actors/player/abilities/counter_slash/` (`CounterSlash`): 세상을 거의 멈춘 채(GameFeel) 실제 시간으로 검보라 X자 두 획을 새기고, 결정타 순간 `receive_hit(counter_damage=999)`로 즉사.
 - 적 전용 기술(돌진/참격)은 현재 각 적 스크립트 안에 있다. 두 번째 사용처가 생기면 `combat/attacks/`로 올린다.
-- 플레이어 전투 기술(콤보/패링/대시/궁극기)은 지금은 `player.gd`에 모아 feel을 빠르게 튜닝한다. "장착형 어빌리티" 시스템(두 번째 사용자)이 실제로 생기면 `actors/player/abilities/<name>/`로 분리한다.
+- **궁극기 — 월아 참격**(`actors/player/abilities/moon_slash/`, `MoonSlash`): Player가 발사(`ult_windup` 0.14초 뒤, 시전 중 무적·공중 체공)만 하고 나머지는 투사체가 처리한다. 속도 = `start_speed × e^(growth × t)` (처음엔 느리다가 지수적으로 빨라짐, 최대 2600). 본체(`Body` Hitbox, 반달 앞쪽 캡슐 r44·h250)가 적에게 닿으면 그 순간 겹친 적 전부 1타 20(평타 2배) + 띄우기 후 처음 닿은 적의 자리에서 깨진다(벽이면 반달 몸통 자리, 사거리 끝은 그냥 소멸). 깨진 자리에 양옆으로 벌어지는 열린 회오리 `vortex_time`(0.32초) → 위로 긴 사각형 `Burst` Hitbox(340x540, 깨진 높이 아래 70 ~ 위 470)로 폭발, 2타 40(평타 4배) + 크게 띄우기. 두 Hitbox 모두 적마다 1회. 모양은 일부러 불완전하다: 반달 안쪽 날 톱니·바깥 날 이 빠짐·끊긴 흰 심, 기둥은 찢긴 가장자리·가시 왕관·옆 가시·균열선 (주기적으로 다시 흔든다).
+- **에어본**: `Enemy`가 위쪽 넉백이 `LAUNCH_THRESHOLD`(-400)보다 강한 피격을 받으면 착지할 때까지 HITSTUN을 유지하고 몸이 뒤로 기운다 (나는 적은 `MAX_AIRBORNE` 1.4초 뒤 풀림, 슈퍼아머 중엔 띄워지지 않음). 컴포넌트 계약은 그대로 — 띄우기는 넉백 벡터의 크기로만 전달한다.
+- 플레이어 전투 기술(콤보/패링/대시)은 지금은 `player.gd`에 모아 feel을 빠르게 튜닝한다. "장착형 어빌리티" 시스템(두 번째 사용자)이 실제로 생기면 `actors/player/abilities/<name>/`로 분리한다.
 - 스폰물이 있는 스킬은 `actors/player/abilities/<name>/`에 둔다. 첫 스킬 **장풍**(`void_orb/`):
   - `void_orb_ability.gd` (`Combat/VoidOrb`): 쿨다운·발사. 입력 우선순위와 시전 자세(반동/공중 체공/캔슬)는 `player.gd`의 `Action.SKILL`이 정한다.
   - `void_orb_projectile.gd/.tscn` (Projectile 프리셋: `Visual` / `Hitbox` / `Collision` / `Audio`): 적 관통 + 다단히트(Hitbox `apply_on_contact = false`, 겹친 적을 `hit_interval`마다 최대 `max_hits_per_target`회 `receive_hit`) + 맞을 때마다 짧은 넉백. `Collision`(mask=world)에 벽이 닿으면 소멸하고, one-way 발판은 통과한다.
 - 두 번째 스킬 **대시 참격**(`dash_slash/`): 대시와 동시에, 또는 대시 중 E → 대시가 끝난 뒤 조금 더 파고들며 수평으로 긴 참격.
   - `dash_slash_ability.gd` (`Combat/DashSlash`, 자식 `Hitbox`): 쿨다운·판정 설정/on·off·궤적 스폰. 예약·전진·캔슬은 `player.gd`의 `Action.DASH_SLASH`.
   - `dash_slash_effect.gd/.tscn`: `_draw`로 그리는 길고 선명한 수평 칼빛(4겹 + 평행 잔상 + 베어낸 자국 + 끝점 별빛, 판정 길이와 맞춘 270px). 스폰물이라 기술 폴더에 둔다.
-  - 판정: `Hitbox` 260x50, 중심이 몸 앞 116px (앞으로 약 246px까지). 전용 사운드: 시전 `dash_slash.wav`(바람) + `dash_slash_ring.wav`(칼날 울림), 명중 `dash_slash_hit.wav`.
+  - 판정: `Hitbox` 기본 260x50, 중심이 몸 앞 116px (앞으로 약 246px까지). 대시로 지나온 길도 벤다: Player가 대시 시작점을 기억해 지나온 거리(+여유 40, 최대 360)를 `begin(caster, dir, back)`으로 넘기면 판정 사각형과 칼빛이 그만큼 뒤쪽(대시 시작점)까지 늘어난다 (판정 Shape은 `_ready`에서 복제해 쓴다). 전용 사운드: 시전 `dash_slash.wav`(바람) + `dash_slash_ring.wav`(칼날 울림), 명중 `dash_slash_hit.wav`.
   - 입력 규칙: 대시 중 E는 장풍이 아니라 대시 참격 예약이다. E를 먼저 누르고 장풍이 나가기 전(0.06초)에 대시를 누르면 동시 입력으로 보고 대시 참격으로 바꾼다.
   - 유예 시간(코요테 타임식): 대시를 끝까지 탄 뒤 `dash_slash_grace`(0.12초) 안에 누른 E도 대시 참격이다. 그 뒤의 E는 장풍.
 - 세 번째 스킬 **벼락**(`lightning/`): 위(W/↑)를 누른 채 E. 쿨다운 2초 (쿨다운 중이면 아무것도 나가지 않는다 — 장풍으로 새지 않게).
