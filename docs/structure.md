@@ -171,6 +171,7 @@ HitboxComponent (Area2D)  ──area_entered──▶  HurtboxComponent (Area2D)
 | 7 | `enemy_hitbox` | Enemy AttackHitbox | 64 | player_hurtbox |
 
 - 바디는 world만 mask → 플레이어와 적은 서로 밀지 않고 통과한다(근접전에서 몸싸움 노이즈 제거).
+- **반격 불가 투사체**: 감시자의 바늘(`WatcherNeedle`)은 Hitbox layer를 0으로 둔다 (mask=`player_hurtbox`만). ParryBox가 감지하지 못하므로 반격 대상이 아니다 — 피해야 하는 공격.
 - **패링 예외**: 플레이어 `Combat/ParryBox`(Area2D)는 mask=`enemy_hitbox`(64)로 적 공격 판정을 직접 감지한다. 패링 창이 열린 동안 적 Hitbox를 감지하면 패링 성공으로 처리한다. 적 Hitbox는 `enemy_hitbox` layer를 켜 두므로 ParryBox가 감지할 수 있다(이것이 Hurtbox가 아닌 Area2D가 상대 Hitbox를 감지하는 유일한 지점).
 - 피격/패링 연결은 씬의 NodePath 직렬화에 의존하지 않고 Actor의 `_ready()`에서 `hurtbox.health = health`로 코드 연결한다(손으로 작성한 `.tscn`에서 노드 타입 export가 안정적으로 풀리지 않는 경우 대비).
 
@@ -239,7 +240,7 @@ Player (CharacterBody2D)                       actors/player/player.gd
 │       └── Hitbox(+CollisionShape2D)
 └── Audio (AudioStreamPlayer2D들)
 
-Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/
+Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, watcher/
 ├── Visual (Node2D, hit_flash 머티리얼 local_to_scene)
 │   ├── Body (Sprite2D, 9프레임 시트)
 │   └── Blade (Sprite2D)                        듀얼리스트만
@@ -249,13 +250,20 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/
 ```
 
 - **반격(패링) 규칙**: 적의 모든 공격은 휘두르기 직전 `glint_duration`(0.4초) 동안 금빛으로 반짝인다 (`Enemy.begin_glint()/end_glint()/is_glinting()`, `combat/effects/glint/` 별빛 + glint 사운드). 플레이어가 그 순간 반격 키를 누르면 `ParryBox`에 겹친 반짝이는 적이 `on_parried()`로 경직된다. 반짝임이 없을 때 누르면 헛반격(무적 없음, 0.5초 재사용 대기 — 연타로는 못 맞춘다).
+- **연쇄 반격**: 반격(근접 반짝임/카유공)에 성공하면 `chain_window`(0.2초, 게임 시간 — 반격 연출의 hit-stop 동안 줄지 않음) 동안 반격 키를 다시 누를 수 있다. 누르면 "예약"되어 창이 끝날 때까지 유효하고, 그 사이 반짝임/카유공이 생기면 자동으로 받아친다(받아칠 때마다 창이 다시 열려 계속 이어짐, 반격음이 점점 높아진다). 끝까지 대상이 없으면 헛반격 페널티 없이 끝난다. 예약 입력은 `player.gd`의 `_process`에서 읽어 hit-stop 중에도 놓치지 않는다. 처음 성공시킨 그 입력으로는 예약되지 않는다.
 - 번쩍임(피격/반짝임/경직)은 `combat/effects/hit_flash/hit_flash.gdshader`를 Visual에 두고 자식은 `use_parent_material`로 칠한다 (어두운 픽셀아트는 modulate로는 밝아지지 않는다).
 - 모든 아트는 "1 아트 픽셀 = 2px" 밀도이고 Sprite2D `scale = 2`로 쓴다. 프로젝트 기본 텍스처 필터는 Nearest.
 
 - `GameFeel` (Autoload, `managers/game_feel.gd`): `hit_stop(duration)` 프리즈 프레임(실시간 복구 타이머), `shake(trauma)`는 `GameCamera.current`로 전달.
 - 전투 손맛(hit-stop/shake/슬래시·스파크·잔상)은 명중·패링·사망 순간에 적용한다. VFX는 외부 이미지 없이 `_draw`로 그린다 (`combat/effects/slash|spark|afterimage/`).
-- 입력 액션(추가분): `player_jump` `player_attack` `player_parry` `player_dash` `player_skill`(E) `player_ultimate` + `player_move_left/right`에 A/D 추가.
+- 입력 액션(추가분): `player_jump`(Space만) `player_attack` `player_parry` `player_dash` `player_skill`(E) `player_ultimate` + `player_move_left/right`에 A/D 추가, `player_move_up`(↑/W)은 "위 방향" 수식키(위+E = 벼락). W/↑는 점프가 아니다.
 - `Toolkit` (`toolkit.gd`): `tool_toggle_hud` / `tool_restart` / `tool_pause`.
+- **카유공(카운터 유도 공격)** — 감시자(`actors/enemies/watcher/`, 공중 원거리 중간 보스급 적 — 금장 갑각·가시 왕관·후광·칼날깃 날개, 잡몹보다 크다):
+  - 평소: 플레이어 위쪽 옆(`hover_distance`/`hover_height`)을 떠다니며 바늘(`watcher_needle.gd/.tscn`, 반격 불가)을 쏜다. 날아다니므로 `_apply_gravity`를 감속으로 오버라이드하고 몸은 지형과 충돌하지 않는다(mask 0, `fly_bounds` 안에 머문다 — 레벨이 스폰 때 지정).
+  - CHARGE 2초(금빛 입자가 점점 빠르게 몸 중앙으로, `watcher_tell.gd`) → WINDOW 0.4초(거대한 + 섬광 + 조준선) → 못 받아치면 히트스캔 광선(`watcher_beam.gd` 겉모습). CHARGE/WINDOW는 슈퍼아머.
+  - 광선은 **확정 피격**: 맞히기 직전 대상 Hurtbox의 `invincible`을 끄고 `receive_hit()` (대시 무적/다른 적 반격 중 무적도 뚫는다). 지형에만 막히며, 그래서 CHARGE/WINDOW 동안 시야(world 레이, one-way 발판 포함)가 막히면 시야가 트이는 자리로 스스로 옮긴다.
+  - 반격: `Enemy.is_counter_open()` / `Enemy.on_countered(from_pos)` (기본은 없음 — 감시자가 오버라이드)와 그룹 `counter_threat`. 플레이어가 반격 키를 누르면 ParryBox의 반짝이는 근접 공격을 먼저 처리하고, 그게 없을 때만 열린 카유공을 **방향·거리 무관**하게 받아친다 (= 다른 적 반격에 쓴 입력으로는 광선을 막지 못한다).
+  - 반격 성공 → `actors/player/abilities/counter_slash/` (`CounterSlash`): 세상을 거의 멈춘 채(GameFeel) 실제 시간으로 검보라 X자 두 획을 새기고, 결정타 순간 `receive_hit(counter_damage=999)`로 즉사.
 - 적 전용 기술(돌진/참격)은 현재 각 적 스크립트 안에 있다. 두 번째 사용처가 생기면 `combat/attacks/`로 올린다.
 - 플레이어 전투 기술(콤보/패링/대시/궁극기)은 지금은 `player.gd`에 모아 feel을 빠르게 튜닝한다. "장착형 어빌리티" 시스템(두 번째 사용자)이 실제로 생기면 `actors/player/abilities/<name>/`로 분리한다.
 - 스폰물이 있는 스킬은 `actors/player/abilities/<name>/`에 둔다. 첫 스킬 **장풍**(`void_orb/`):
@@ -263,9 +271,14 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/
   - `void_orb_projectile.gd/.tscn` (Projectile 프리셋: `Visual` / `Hitbox` / `Collision` / `Audio`): 적 관통 + 다단히트(Hitbox `apply_on_contact = false`, 겹친 적을 `hit_interval`마다 최대 `max_hits_per_target`회 `receive_hit`) + 맞을 때마다 짧은 넉백. `Collision`(mask=world)에 벽이 닿으면 소멸하고, one-way 발판은 통과한다.
 - 두 번째 스킬 **대시 참격**(`dash_slash/`): 대시와 동시에, 또는 대시 중 E → 대시가 끝난 뒤 조금 더 파고들며 수평으로 긴 참격.
   - `dash_slash_ability.gd` (`Combat/DashSlash`, 자식 `Hitbox`): 쿨다운·판정 설정/on·off·궤적 스폰. 예약·전진·캔슬은 `player.gd`의 `Action.DASH_SLASH`.
-  - `dash_slash_effect.gd/.tscn`: `_draw`로 그리는 수평 칼빛 (스폰물이라 기술 폴더에 둔다).
+  - `dash_slash_effect.gd/.tscn`: `_draw`로 그리는 길고 선명한 수평 칼빛(4겹 + 평행 잔상 + 베어낸 자국 + 끝점 별빛, 판정 길이와 맞춘 270px). 스폰물이라 기술 폴더에 둔다.
+  - 판정: `Hitbox` 260x50, 중심이 몸 앞 116px (앞으로 약 246px까지). 전용 사운드: 시전 `dash_slash.wav`(바람) + `dash_slash_ring.wav`(칼날 울림), 명중 `dash_slash_hit.wav`.
   - 입력 규칙: 대시 중 E는 장풍이 아니라 대시 참격 예약이다. E를 먼저 누르고 장풍이 나가기 전(0.06초)에 대시를 누르면 동시 입력으로 보고 대시 참격으로 바꾼다.
   - 유예 시간(코요테 타임식): 대시를 끝까지 탄 뒤 `dash_slash_grace`(0.12초) 안에 누른 E도 대시 참격이다. 그 뒤의 E는 장풍.
+- 세 번째 스킬 **벼락**(`lightning/`): 위(W/↑)를 누른 채 E. 쿨다운 2초 (쿨다운 중이면 아무것도 나가지 않는다 — 장풍으로 새지 않게).
+  - `lightning_ability.gd` (`Combat/Lightning`): 쿨다운·번개 스폰. 시전 자세는 `player.gd`의 `Action.LIGHTNING`: 이동 불가, 공중이면 `travel_time`(0.15초) 동안 떠 있다가 도달 후 `lightning_recovery`만큼 더 굳는다(반격으로만 끊김).
+  - `lightning_bolt.gd/.tscn` (Attack 프리셋, Effects 컨테이너): 전조 → 도달 시 Hitbox on. 판정 = 하늘→도달점 기둥(`Hitbox/Path`) + 도달점 원(`Hitbox/Area`, r120), 적마다 1회 20 데미지(평타 2배), 바깥으로 넉백 + 맞은 적마다 약한 흔들림. 판정은 한 번이지만 번개는 `linger_time`(0.75초) 동안 남아 `PULSES`대로 몇 번 더 내리치듯 맥동하고, 갈래 번개가 자라며 도달점에서 전기 줄기가 위쪽·바닥을 따라 퍼진다. 번개 모양은 실제 시간으로 계속 다시 그려 hit-stop 중에도 요동친다.
+- 스킬 입력 우선순위 정리: 대시 중/동시/직후 유예 시간의 E → 대시 참격 (위를 누르고 있어도) > 위+E → 벼락 > E → 장풍.
 
 ---
 

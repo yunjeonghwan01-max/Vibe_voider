@@ -4,9 +4,15 @@ extends CharacterBody2D
 ## 떠돌이 검사(검은 고양이). 빠르고 반응 좋은 이동 + 근접 전투의 핵심.
 ##
 ## 이동:  달리기(가감속) / 점프(코요테 타임 + 점프 버퍼 + 가변 높이) / 대시(무적·잔상)
-## 전투:  3연속 참격 콤보 / 반격(패링) / 스킬(E: 장풍, 대시+E: 대시 참격) / 궁극기(전투로 충전, 수동 발동)
+## 전투:  3연속 참격 콤보 / 반격(패링) / 스킬(E: 장풍, 대시+E: 대시 참격, 위+E: 벼락) / 궁극기(전투로 충전, 수동 발동)
 ##
 ## 반격 규칙: 적이 공격 직전 0.4초 동안 금빛으로 "반짝"인다. 그 순간 반격 키를 눌러야만 성공한다.
+##   - 카유공(감시자의 + 섬광, 0.4초): 바라보는 방향과 무관하게 반격 키로 받아친다 → X자 참격으로 즉사.
+##     단, 그 입력이 ParryBox 안의 반짝이는 근접 공격 반격에 쓰였다면 카유공은 받아치지 못한다.
+##   - 연쇄 반격: 반격(근접/카유공)에 성공한 뒤 chain_window(0.2초) 안에 반격 키를 다시 누르면 "예약"된다.
+##     예약은 창이 끝날 때까지 유효해서, 그 사이 반짝임/카유공이 생기면 자동으로 받아친다.
+##     끝까지 받아칠 게 없으면 헛반격 없이 조용히 끝난다. 받아칠 때마다 창이 다시 열려 계속 이어갈 수 있다.
+##     창은 게임 시간으로 재므로 반격 연출의 정지(hit-stop) 동안에는 줄지 않는다.
 ##   - 누른 순간 ParryBox 안에 반짝이는 적의 공격 판정이 있으면 성공 → 적 경직, 공격 취소.
 ##   - 아니면 헛반격: 짧은 경직 + 재사용 대기(연타로는 맞출 수 없다). 헛반격엔 무적이 없다.
 ##
@@ -18,7 +24,7 @@ signal ultimate_changed(charge: float, max_charge: float)
 signal ultimate_ready_changed(is_ready: bool)
 signal died
 
-enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD }
+enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, ULTIMATE, HURT, DEAD }
 
 # ─────────────────────────── 이동 튜닝 ───────────────────────────
 @export_group("Movement")
@@ -56,6 +62,8 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD
 @export var parry_success_time: float = 0.24     # 성공 후 자세 유지(무적)
 @export var parry_whiff_time: float = 0.3        # 헛반격 경직 (무적 없음)
 @export var parry_whiff_cooldown: float = 0.5    # 헛반격 후 재입력 금지 — 반짝임(0.4초)보다 길어서 연타가 안 통한다
+@export var counter_damage: int = 999            # 카유공 반격 결정타 (즉사)
+@export var chain_window: float = 0.2            # 반격 성공 후 연쇄 반격 입력을 받는 시간
 
 @export_group("Skill")
 @export var skill_windup: float = 0.06         # 손을 내지르는 순간 발사
@@ -71,6 +79,9 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD
 @export var dash_slash_active: float = 0.1
 @export var dash_slash_recovery: float = 0.15
 
+@export_group("Lightning")
+@export var lightning_recovery: float = 0.2      # 번개가 꽂힌 뒤에도 이만큼 이동 불가 (도달 전에는 공중이면 떠 있다)
+
 @export_group("Ultimate")
 @export var ultimate_max: float = 100.0
 @export var ult_charge_on_parry: float = 34.0
@@ -83,6 +94,7 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD
 @export var slash_scene: PackedScene
 @export var spark_scene: PackedScene
 @export var afterimage_scene: PackedScene
+@export var counter_slash_scene: PackedScene
 
 # ─────────────────────────── 노드 ───────────────────────────
 @onready var visual: PlayerVisual = $Visual
@@ -94,6 +106,7 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD
 @onready var parry_box: Area2D = $Combat/ParryBox
 @onready var void_orb: VoidOrbAbility = $Combat/VoidOrb
 @onready var dash_slash: DashSlashAbility = $Combat/DashSlash
+@onready var lightning: LightningAbility = $Combat/Lightning
 @onready var sfx_swing: Array[AudioStreamPlayer2D] = [
 	$Audio/Swing1 as AudioStreamPlayer2D, $Audio/Swing2 as AudioStreamPlayer2D, $Audio/Swing3 as AudioStreamPlayer2D]
 @onready var sfx_hit: AudioStreamPlayer2D = $Audio/Hit
@@ -110,6 +123,8 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD
 @onready var sfx_ult_hit: AudioStreamPlayer2D = $Audio/UltHit
 @onready var sfx_orb_cast: AudioStreamPlayer2D = $Audio/OrbCast
 @onready var sfx_dash_slash: AudioStreamPlayer2D = $Audio/DashSlash
+@onready var sfx_dash_slash_ring: AudioStreamPlayer2D = $Audio/DashSlashRing
+@onready var sfx_dash_slash_hit: AudioStreamPlayer2D = $Audio/DashSlashHit
 
 # ─────────────────────────── 상태 ───────────────────────────
 var facing: float = 1.0
@@ -129,9 +144,14 @@ var _combo_timer: float = 0.0        # 콤보 연결 유지 타이머
 var _attack_buffered: bool = false
 var _hitbox_live: bool = false       # 이번 스윙에서 판정이 켜졌는지
 var _parry_success: bool = false
+var _chain_t: float = 0.0              # 연쇄 반격 창 남은 시간 (반격 성공 시 열림)
+var _chain_armed: bool = false         # 창 안에서 반격 키를 눌러 예약됨 → 받아칠 게 생기면 자동 반격
+var _chain_skip_press: bool = false    # 창을 연 바로 그 입력으로 예약되지 않게 한 화면 프레임 건너뛴다
+var _chain_count: int = 0              # 이어진 연쇄 수 (반격음이 점점 높아진다)
 var _skill_fired: bool = false
 var _dash_slash_queued: bool = false   # 대시 중 E 입력 → 대시가 끝나면 대시 참격
 var _dash_slash_window: float = 0.0    # 대시 직후 대시 참격 유예 시간 (남은 초)
+var _lightning_struck: bool = false
 
 var _squash: Vector2 = Vector2.ONE   # 스쿼시&스트레치
 var _attack_hitbox_base_pos: Vector2
@@ -151,6 +171,7 @@ func _ready() -> void:
 	void_orb.hit_landed.connect(_on_skill_hit)
 	void_orb.ready_again.connect(_on_skill_ready)
 	dash_slash.hit_landed.connect(_on_dash_slash_landed)
+	lightning.hit_landed.connect(_on_lightning_hit)
 
 	attack_hitbox.source = self
 	attack_hitbox.monitoring = false
@@ -167,8 +188,19 @@ func _ready() -> void:
 	ultimate_changed.emit(ult_charge, ultimate_max)
 
 
+func _process(_delta: float) -> void:
+	# 연쇄 반격 입력은 hit-stop(물리 정지) 중에도 놓치지 않도록 화면 프레임마다 읽는다.
+	if _chain_skip_press:
+		_chain_skip_press = false
+		return
+	if _chain_t > 0.0 and not _chain_armed and Input.is_action_just_pressed("player_parry"):
+		_chain_armed = true
+		_set_flash(Color(0.6, 0.95, 1.0), 0.7)
+
+
 func _physics_process(delta: float) -> void:
 	_tick_timers(delta)
+	_tick_chain(delta)
 
 	match action:
 		Action.DASH:
@@ -179,6 +211,8 @@ func _physics_process(delta: float) -> void:
 			_process_parry(delta)
 		Action.SKILL:
 			_process_skill(delta)
+		Action.LIGHTNING:
+			_process_lightning(delta)
 		Action.DASH_SLASH:
 			_process_dash_slash(delta)
 		Action.ULTIMATE:
@@ -228,11 +262,16 @@ func _process_free(delta: float) -> void:
 			and _can_dash() and dash_slash.can_use():
 		_start_dash()                    # 같은 프레임의 E는 _start_dash가 대시 참격으로 예약한다
 		return
-	# 대시가 막 끝난 유예 시간 안의 E는 장풍이 아니라 대시 참격
+	# 대시가 막 끝난 유예 시간 안의 E는 (위를 누르고 있어도) 대시 참격 — 대시 중과 같은 규칙
 	if Input.is_action_just_pressed("player_skill") and _dash_slash_window > 0.0 and dash_slash.can_use():
 		_start_dash_slash()
 		return
-	if Input.is_action_just_pressed("player_skill") and void_orb.can_cast():
+	# 위(W/↑)를 누른 채 E = 벼락. 쿨다운 중이면 아무것도 나가지 않는다 (장풍으로 새지 않게).
+	if Input.is_action_just_pressed("player_skill") and _up_held():
+		if lightning.can_cast():
+			_start_lightning()
+			return
+	elif Input.is_action_just_pressed("player_skill") and void_orb.can_cast():
 		_start_skill()
 		return
 	if Input.is_action_just_pressed("player_dash") and _can_dash():
@@ -248,6 +287,10 @@ func _process_free(delta: float) -> void:
 
 	_apply_horizontal(delta, _move_input(), true)
 	_apply_gravity(delta)
+
+
+func _up_held() -> bool:
+	return Input.is_action_pressed("player_move_up")
 
 
 func _move_input() -> float:
@@ -408,11 +451,17 @@ func _process_attack(delta: float) -> void:
 		_end_attack()
 		_start_dash()
 		return
-	# 판정이 끝난 뒤(후딜)에는 장풍으로 이어 쏠 수 있다 — 베고 바로 쏘는 콤보
-	if _action_time >= active_end and Input.is_action_just_pressed("player_skill") and void_orb.can_cast():
-		_end_attack()
-		_start_skill()
-		return
+	# 판정이 끝난 뒤(후딜)에는 장풍/벼락으로 이어 쓸 수 있다 — 베고 바로 쏘는 콤보
+	if _action_time >= active_end and Input.is_action_just_pressed("player_skill"):
+		if _up_held():
+			if lightning.can_cast():
+				_end_attack()
+				_start_lightning()
+				return
+		elif void_orb.can_cast():
+			_end_attack()
+			_start_skill()
+			return
 
 	var total := swing_windup + swing_active + swing_recovery
 	if _action_time >= total:
@@ -535,6 +584,46 @@ func _on_skill_ready() -> void:
 		_set_flash(Color(0.75, 0.55, 1.0), 0.4)
 
 
+# ─────────────────────────── 스킬: 벼락 ───────────────────────────
+## 시전하면 그 자리에 굳는다(이동 불가). 공중이면 번개가 도달할 때까지 떠 있고, 도달 후 lightning_recovery만큼 더 굳는다.
+func _start_lightning() -> void:
+	action = Action.LIGHTNING
+	_action_time = 0.0
+	_lightning_struck = false
+	velocity.x = 0.0
+	if not is_on_floor():
+		velocity.y = 0.0
+	_squash = Vector2(0.85, 1.18)
+	_set_flash(Color(0.7, 0.5, 1.0), 0.5)
+	visual.play(&"cast_up")
+	lightning.cast(self)
+
+
+func _process_lightning(delta: float) -> void:
+	_action_time += delta
+	velocity.x = 0.0
+	var arrived := _action_time >= lightning.travel_time
+	if not arrived:
+		velocity.y = 0.0               # 번개가 닿을 때까지 공중에 떠 있다
+		return
+	if not _lightning_struck:
+		_lightning_struck = true
+		_squash = Vector2(1.3, 0.75)
+		_set_flash(Color(0.92, 0.82, 1.0), 1.0)
+	_apply_gravity(delta)
+	# 번개가 꽂힌 뒤에는 반격으로만 끊을 수 있다 (이동은 여전히 불가)
+	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+		_start_parry()
+		return
+	if _action_time >= lightning.travel_time + lightning_recovery:
+		action = Action.NONE
+		visual.play(&"locomotion")
+
+
+func _on_lightning_hit(_hurt: HurtboxComponent) -> void:
+	_add_ultimate(ult_charge_on_hit)
+
+
 # ─────────────────────────── 스킬: 대시 참격 ───────────────────────────
 func _queue_dash_slash() -> void:
 	if _dash_slash_queued or not dash_slash.can_use():
@@ -554,6 +643,8 @@ func _start_dash_slash() -> void:
 	dash_slash.begin(self, facing)
 	visual.play(&"dash_slash")
 	_sfx(sfx_dash_slash, 0.06)
+	_sfx(sfx_dash_slash_ring, 0.03)      # 전용 칼날 울림 "스링—"
+	GameFeel.shake(0.12)
 	_spawn_afterimage()
 
 
@@ -602,9 +693,10 @@ func _end_dash_slash() -> void:
 
 
 func _on_dash_slash_landed(hurt: HurtboxComponent) -> void:
-	GameFeel.hit_stop(0.05)
-	GameFeel.shake(0.3)
-	_sfx(sfx_hit_heavy, 0.1)
+	GameFeel.hit_stop(0.065)
+	GameFeel.shake(0.36)
+	_sfx(sfx_dash_slash_hit, 0.08)       # 전용 명중음 "촥!"
+	_set_flash(Color(0.9, 0.8, 1.0), 0.5)
 	_add_ultimate(ult_charge_on_hit)
 	_spawn_spark(hurt.global_position, Color(0.92, 0.8, 1.0, 1.0), 10, 50.0,
 			0.0 if facing > 0.0 else 180.0, 64.0)
@@ -619,6 +711,11 @@ func _start_parry() -> void:
 
 	var targets := _glinting_attackers()
 	if targets.is_empty():
+		# 반짝이는 근접 공격이 없으면, 열려 있는 카유공을 방향 무관하게 받아친다.
+		var threats := _open_counter_threats()
+		if not threats.is_empty():
+			_start_counter(threats)
+			return
 		# 헛반격 — 반짝이지 않을 때 눌렀다. 경직 + 재사용 대기, 무적 없음.
 		_parry_success = false
 		_parry_cd = parry_whiff_cooldown
@@ -633,6 +730,7 @@ func _start_parry() -> void:
 
 	_parry_success = true
 	_parry_cd = 0.0                   # 성공하면 바로 다음 공격(연격)도 받아칠 수 있다
+	_open_chain()
 	facing = signf(targets[0].global_position.x - global_position.x)
 	if facing == 0.0:
 		facing = 1.0
@@ -655,6 +753,81 @@ func _glinting_attackers() -> Array[Enemy]:
 	return found
 
 
+## 카유공 창이 열려 있는 적들 (방향·거리 무관).
+func _open_counter_threats() -> Array[Enemy]:
+	var found: Array[Enemy] = []
+	for n in get_tree().get_nodes_in_group("counter_threat"):
+		var enemy := n as Enemy
+		if enemy != null and enemy.is_counter_open():
+			found.append(enemy)
+	return found
+
+
+## 카유공 반격 성공 — 세상이 거의 멈추고, 각 대상 몸에 검보라 X자 참격을 새겨 즉사시킨다.
+func _start_counter(threats: Array[Enemy]) -> void:
+	_parry_success = true
+	_parry_cd = 0.0
+	_open_chain()
+	facing = signf(threats[0].global_position.x - global_position.x)
+	if facing == 0.0:
+		facing = 1.0
+	hurtbox.invincible = true
+	visual.play(&"parry_success")
+	_spawn_parry_stance(true)
+	GameFeel.hit_stop(0.16, 0.05)
+	GameFeel.flash(Color(0.3, 0.05, 0.45), 0.22, 0.2)
+	GameFeel.shake(0.6)
+	_sfx(sfx_parry, 0.0)
+	sfx_parry.pitch_scale *= 1.0 + 0.07 * _chain_count
+	_add_ultimate(ult_charge_on_parry)
+	_set_flash(Color(0.75, 0.45, 1.0), 1.0)
+	_spawn_parry_spark(global_position + Vector2(facing * 26.0, -16.0), 1.2)
+	for enemy in threats:
+		enemy.on_countered(global_position)
+		_spawn_counter_slash(enemy)
+
+
+func _spawn_counter_slash(enemy: Enemy) -> void:
+	if counter_slash_scene == null:
+		return
+	var cs := counter_slash_scene.instantiate() as CounterSlash
+	cs.target = enemy.hurtbox
+	cs.source = self
+	cs.damage = counter_damage
+	cs.from_pos = global_position + Vector2(0.0, -8.0)
+	_fx_parent().add_child(cs)
+	cs.global_position = enemy.global_position
+
+
+# ─────────────────────────── 연쇄 반격 ───────────────────────────
+## 반격 성공 순간 호출 — 연쇄 창을 (다시) 연다. 이미 창 안에서 이어진 성공이면 연쇄 수가 오른다.
+func _open_chain() -> void:
+	_chain_count = _chain_count + 1 if _chain_t > 0.0 or _chain_armed else 0
+	_chain_t = chain_window
+	_chain_armed = false
+	_chain_skip_press = true
+
+
+func _tick_chain(delta: float) -> void:
+	if _chain_armed and _has_counter_target():
+		_start_parry()                 # 받아칠 대상이 있을 때만 부르므로 헛반격이 되지 않는다
+		return
+	if _chain_t > 0.0:
+		_chain_t = maxf(_chain_t - delta, 0.0)
+		if _chain_t == 0.0:
+			_chain_armed = false       # 끝까지 받아칠 게 없었다 — 페널티 없이 조용히 끝
+
+
+func _has_counter_target() -> bool:
+	return not _glinting_attackers().is_empty() or not _open_counter_threats().is_empty()
+
+
+func _cancel_chain() -> void:
+	_chain_t = 0.0
+	_chain_armed = false
+	_chain_count = 0
+
+
 func _process_parry(delta: float) -> void:
 	_action_time += delta
 	if is_on_floor():
@@ -674,6 +847,7 @@ func _trigger_parry_success(targets: Array[Enemy]) -> void:
 	GameFeel.shake(0.8)
 	GameFeel.flash(Color(0.85, 0.97, 1.0), 0.55, 0.2)
 	_sfx(sfx_parry, 0.04)
+	sfx_parry.pitch_scale *= 1.0 + 0.07 * _chain_count   # 연쇄할수록 반격음이 높아진다
 	_add_ultimate(ult_charge_on_parry)
 	_set_flash(Color(0.85, 1.0, 1.0), 1.0)
 	_spawn_parry_spark(global_position + Vector2(facing * 26.0, -16.0), 1.0)
@@ -768,6 +942,7 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	_action_time = 0.0
 	attack_hitbox.monitoring = false
 	dash_slash.set_active(false)
+	_cancel_chain()
 	_dash_slash_queued = false
 	attack_shape.scale = Vector2.ONE
 	trail.visible = false
@@ -793,6 +968,7 @@ func _on_died() -> void:
 	action = Action.DEAD
 	attack_hitbox.monitoring = false
 	dash_slash.set_active(false)
+	_cancel_chain()
 	_dash_slash_queued = false
 	attack_shape.scale = Vector2.ONE
 	hurtbox.invincible = true

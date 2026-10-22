@@ -45,6 +45,15 @@ func _init() -> void:
 	_save("orb_cast", _orb_cast(), SR)
 	_save("orb_hit", _orb_hit(), SR)
 	_save("dash_slash", _swing(0.2, 2300.0, 0.35), SR)   # 대시 참격: 짧고 날카로운 바람 + 약간의 무게
+	# 감시자 / 카유공 — 새 소리는 항상 이 아래에 추가한다 (rng 소비 순서 유지)
+	_save("needle_shot", _needle_shot(), SR)
+	_save("counter_charge", _counter_charge(), SR)
+	_save("counter_cue", _counter_cue(), SR)
+	_save("beam_fire", _beam_fire(), SR)
+	_save("counter_slash", _counter_slash(), SR)
+	_save("lightning", _lightning(), SR)
+	_save("dash_slash_ring", _dash_slash_ring(), SR)
+	_save("dash_slash_hit", _dash_slash_hit(), SR)
 	print("[audio_gen] done")
 	quit()
 
@@ -570,3 +579,170 @@ func _orb_hit() -> PackedFloat32Array:
 		var crack := st.run(_n(), 2400.0, 0.5).band * exp(-t * 70.0)
 		b[i] = (thump + crack * 1.2) * env
 	return _normalize(b, 0.8)
+
+
+# ═══════════════════════════════ 감시자 / 카유공 ═══════════════════════════════
+## 바늘 발사: 짧고 높은 "픽-" 소리.
+func _needle_shot() -> PackedFloat32Array:
+	var dur := 0.14
+	var b := _buf(dur)
+	var st := SVF.new()
+	var phase := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var env := minf(t / 0.004, 1.0) * exp(-t * 26.0)
+		var f := 2400.0 - 1300.0 * minf(t / dur, 1.0)
+		phase += TAU * f / SR
+		var air := st.run(_n(), 5200.0, 0.6).band * exp(-t * 45.0)
+		b[i] = (sin(phase) * 0.5 + air) * env
+	return _normalize(b, 0.7)
+
+
+## 카유공 충전 (정확히 2초): 점점 높아지고 빨라지는 웅웅거림 + 빨려드는 바람. 끝으로 갈수록 커진다.
+func _counter_charge() -> PackedFloat32Array:
+	var dur := 2.0
+	var b := _buf(dur)
+	var st := SVF.new()
+	var phase := 0.0
+	var lfo := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var u := t / dur
+		var env := minf(t / 0.05, 1.0) * (0.25 + 0.75 * u * u) * minf((dur - t) / 0.02, 1.0)
+		lfo += TAU * (3.0 + 22.0 * u * u) / SR
+		var f := 110.0 + 520.0 * u * u
+		phase += TAU * f * (1.0 + 0.02 * sin(lfo)) / SR
+		var hum := sin(phase) + 0.4 * sin(phase * 2.0) + 0.25 * sin(phase * 3.01)
+		var suck := st.run(_n(), 400.0 + 3600.0 * u, 0.5).band
+		b[i] = (hum * (0.6 + 0.4 * sin(lfo)) * 0.6 + suck * 0.5) * env
+	return _normalize(b, 0.8)
+
+
+## 카유공 신호 "팅!": 날카롭고 맑은 금속성 종소리 (반격하라는 신호).
+func _counter_cue() -> PackedFloat32Array:
+	var dur := 0.6
+	var b := _buf(dur)
+	var partials := [[1760.0, 1.0, 7.0], [2640.0, 0.6, 9.0], [4120.0, 0.45, 13.0], [5300.0, 0.25, 18.0], [880.0, 0.35, 5.0]]
+	for i in b.size():
+		var t := float(i) / SR
+		var s := 0.0
+		for pt in partials:
+			s += sin(TAU * pt[0] * t) * pt[1] * exp(-t * pt[2])
+		var click := _n() * exp(-t * 400.0) * 0.8
+		b[i] = s * minf(t / 0.002, 1.0) + click
+	return _normalize(b, 0.9)
+
+
+## 광선 발사: 거대한 저음 폭발 + 지글거리는 에너지 + 내려가는 톱니파.
+func _beam_fire() -> PackedFloat32Array:
+	var dur := 1.0
+	var b := _buf(dur)
+	var st := SVF.new()
+	var st2 := SVF.new()
+	var p1 := 0.0
+	var p2 := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var env := minf(t / 0.006, 1.0) * exp(-t * 3.2)
+		var boom_f := 40.0 + 120.0 * exp(-t * 14.0)
+		p1 += TAU * boom_f / SR
+		var boom := sin(p1) * exp(-t * 5.0) * 1.2
+		var saw_f := 900.0 * exp(-t * 2.5) + 120.0
+		p2 += saw_f / SR
+		var saw := (fmod(p2, 1.0) * 2.0 - 1.0) * 0.35
+		var sizzle := st.run(_n(), 3000.0 + 2000.0 * sin(t * 90.0), 0.4).band * 0.7
+		var body := st2.run(_n(), 500.0, 0.8).low * 0.8
+		b[i] = (boom + saw + sizzle + body) * env
+	return _normalize(b, 0.95)
+
+
+## 반격 X자 참격: 두 번 가르는 바람(\ /) + 묵직한 결정타 저음.
+func _counter_slash() -> PackedFloat32Array:
+	var dur := 1.1
+	var b := _buf(dur)
+	var cuts := [[0.0, 1700.0], [0.07, 2100.0]]
+	for c in cuts:
+		var st := SVF.new()
+		var start := int(float(c[0]) * SR)
+		var n_len := int(0.16 * SR)
+		for k in n_len:
+			var u := float(k) / n_len
+			var env := pow(sin(PI * pow(u, 0.4)), 2.0)
+			var fc: float = float(c[1]) * (0.6 + 1.2 * sin(PI * pow(u, 0.6)))
+			b[start + k] += st.run(_n(), fc, 0.8).band * env
+	var st3 := SVF.new()
+	var phase := 0.0
+	var hit := int(0.14 * SR)
+	for i in range(hit, b.size()):
+		var t := float(i - hit) / SR
+		var env := minf(t / 0.004, 1.0) * exp(-t * 4.0)
+		phase += TAU * (36.0 + 110.0 * exp(-t * 16.0)) / SR
+		var crunch := st3.run(_n(), 900.0, 0.6).band * exp(-t * 22.0)
+		b[i] += (sin(phase) * 1.3 + crunch * 1.5) * env
+	return _normalize(b, 0.95)
+
+
+# ═══════════════════════════════ 벼락 ═══════════════════════════════
+## 벼락: 0.15초 동안 지직거리며 내려오는 전조 → 도달 순간 찢어지는 "콰직!" + 길게 우르릉.
+## 도달 시점(0.15초)은 lightning_ability.gd의 travel_time과 맞춘다.
+func _lightning() -> PackedFloat32Array:
+	var dur := 1.3
+	var strike := 0.15
+	var b := _buf(dur)
+	var st := SVF.new()
+	var st2 := SVF.new()
+	var st3 := SVF.new()
+	for i in b.size():
+		var t := float(i) / SR
+		var s := 0.0
+		if t < strike:
+			# 전조: 점점 촘촘해지는 지직거림
+			var dens := 0.02 + 0.25 * pow(t / strike, 2.0)
+			if rng.randf() < dens:
+				s += _n() * 0.6 * (t / strike)
+			s += st.run(_n(), 6000.0, 0.5).band * 0.15 * (t / strike)
+		else:
+			var u := t - strike
+			var crack := st2.run(_n(), 3500.0 * exp(-u * 6.0) + 600.0, 0.3).band * exp(-u * 18.0) * 2.2
+			var snap := _n() * exp(-u * 90.0) * 1.5
+			var rumble := st3.run(_n(), 180.0, 0.7).low * exp(-u * 2.6) * (1.0 + 0.4 * sin(u * 37.0)) * 3.0
+			s += crack + snap + rumble
+		b[i] = s
+	return _normalize(b, 0.95)
+
+
+# ═══════════════════════════════ 대시 참격 전용 ═══════════════════════════════
+## 대시 참격 칼날 울림 "스링—": 짧은 쇳소리 마찰 뒤 맑고 긴 금속 공명 (dash_slash.wav의 바람 소리와 겹쳐 재생).
+func _dash_slash_ring() -> PackedFloat32Array:
+	var dur := 0.75
+	var b := _buf(dur)
+	var st := SVF.new()
+	# [주파수, 세기, 감쇠] — 가까운 두 배음(2950/2963)이 맥놀이로 반짝이는 울림을 만든다
+	var partials := [[2950.0, 1.0, 5.5], [2963.0, 0.7, 5.5], [4420.0, 0.6, 8.0], [6080.0, 0.42, 11.0],
+			[7700.0, 0.25, 15.0], [1480.0, 0.3, 4.5]]
+	for i in b.size():
+		var t := float(i) / SR
+		var ring := 0.0
+		for pt in partials:
+			ring += sin(TAU * float(pt[0]) * (1.0 - 0.01 * t) * t) * float(pt[1]) * exp(-t * float(pt[2]))
+		var scrape := st.run(_n(), 5200.0 + 3000.0 * minf(t / 0.03, 1.0), 0.4).band * exp(-t * 55.0) * 1.6
+		b[i] = ring * minf(t / 0.003, 1.0) * 0.55 + scrape
+	return _normalize(b, 0.8)
+
+
+## 대시 참격 명중 "촥!": 날카로운 베임 트랜지언트 + 찢어지는 소리 + 짧은 쇳소리 + 묵직한 저음.
+func _dash_slash_hit() -> PackedFloat32Array:
+	var dur := 0.36
+	var b := _buf(dur)
+	var st := SVF.new()
+	var st2 := SVF.new()
+	var phase := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var crack := st.run(_n(), 6000.0, 0.5).high * exp(-t * 70.0) * 1.4
+		var tear := st2.run(_n(), 4200.0 * exp(-t * 12.0) + 700.0, 0.6).band * exp(-t * 16.0) * 1.3
+		var clink := (sin(TAU * 3500.0 * t) + 0.6 * sin(TAU * 5230.0 * t)) * exp(-t * 26.0) * 0.4
+		phase += TAU * (55.0 + 90.0 * exp(-t * 20.0)) / SR
+		var thump := sin(phase) * exp(-t * 13.0) * 1.1
+		b[i] = (crack + tear + clink + thump) * minf(t / 0.0015, 1.0)
+	return _normalize(b, 0.92)

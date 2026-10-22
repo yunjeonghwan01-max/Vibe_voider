@@ -1,4 +1,4 @@
-[gd_scene load_steps=33 format=3 uid="uid://carenavoider01"]
+[gd_scene load_steps=34 format=3 uid="uid://carenavoider01"]
 
 [ext_resource type="Script" path="res://levels/arena/arena.gd" id="1_arena"]
 [ext_resource type="Script" path="res://camera/game_camera.gd" id="2_cam"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://ui/hud/hud.tscn" id="4_hud"]
 [ext_resource type="PackedScene" path="res://actors/enemies/grunt/grunt.tscn" id="5_grunt"]
 [ext_resource type="PackedScene" path="res://actors/enemies/duelist/duelist.tscn" id="6_duel"]
+[ext_resource type="PackedScene" path="res://actors/enemies/watcher/watcher.tscn" id="6_watcher"]
 [ext_resource type="PackedScene" path="res://world/props/brazier/brazier.tscn" id="7_brazier"]
 [ext_resource type="Texture2D" path="res://assets/temporary/environment/room_sky.png" id="t_sky"]
 [ext_resource type="Texture2D" path="res://assets/temporary/environment/room_backwall.png" id="t_wall"]
@@ -60,6 +61,7 @@ size = Vector2(236, 16)
 script = ExtResource("1_arena")
 grunt_scene = ExtResource("5_grunt")
 duelist_scene = ExtResource("6_duel")
+watcher_scene = ExtResource("6_watcher")
 
 [node name="World" type="Node2D" parent="."]
 

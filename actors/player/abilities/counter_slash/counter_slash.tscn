@@ -1,0 +1,16 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://actors/player/abilities/counter_slash/counter_slash.gd" id="1_cs"]
+[ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="2_spark"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/counter_slash.wav" id="a_slash"]
+
+[node name="CounterSlash" type="Node2D"]
+z_index = 2
+script = ExtResource("1_cs")
+spark_scene = ExtResource("2_spark")
+
+[node name="Audio" type="Node2D" parent="."]
+
+[node name="Slash" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_slash")
+max_distance = 3000.0

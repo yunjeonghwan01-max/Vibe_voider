@@ -1,0 +1,103 @@
+[gd_scene load_steps=19 format=3]
+
+[ext_resource type="Script" path="res://actors/enemies/watcher/watcher.gd" id="1_watcher"]
+[ext_resource type="Script" path="res://actors/enemies/watcher/watcher_tell.gd" id="2_tell"]
+[ext_resource type="Script" path="res://combat/components/health/health.gd" id="3_health"]
+[ext_resource type="Script" path="res://combat/components/hurtbox/hurtbox.gd" id="4_hurt"]
+[ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="5_spark"]
+[ext_resource type="PackedScene" path="res://actors/enemies/watcher/watcher_needle.tscn" id="6_needle"]
+[ext_resource type="PackedScene" path="res://actors/enemies/watcher/watcher_beam.tscn" id="7_beam"]
+[ext_resource type="Shader" path="res://combat/effects/hit_flash/hit_flash.gdshader" id="8_flash"]
+[ext_resource type="Texture2D" path="res://assets/temporary/characters/watcher/watcher.png" id="9_tex"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/needle_shot.wav" id="a_needle"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/counter_charge.wav" id="a_charge"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/counter_cue.wav" id="a_cue"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/beam_fire.wav" id="a_beam"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/enemy_death.wav" id="a_death"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/spawn.wav" id="a_spawn"]
+
+[sub_resource type="ShaderMaterial" id="Mat_flash"]
+resource_local_to_scene = true
+shader = ExtResource("8_flash")
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+shader_parameter/flash = 0.0
+
+[sub_resource type="CircleShape2D" id="Circ_body"]
+radius = 22.0
+
+[sub_resource type="CircleShape2D" id="Circ_hurt"]
+radius = 30.0
+
+[node name="Watcher" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 0
+motion_mode = 1
+script = ExtResource("1_watcher")
+needle_scene = ExtResource("6_needle")
+beam_scene = ExtResource("7_beam")
+move_speed = 190.0
+knockback_resist = 0.3
+spawn_time = 0.8
+spark_scene = ExtResource("5_spark")
+
+[node name="Visual" type="Node2D" parent="."]
+material = SubResource("Mat_flash")
+
+[node name="Body" type="Sprite2D" parent="Visual"]
+use_parent_material = true
+position = Vector2(0, 6)
+scale = Vector2(2, 2)
+texture = ExtResource("9_tex")
+hframes = 6
+
+[node name="BodyCollision" type="CollisionShape2D" parent="."]
+shape = SubResource("Circ_body")
+
+[node name="Tell" type="Node2D" parent="."]
+z_index = 1
+script = ExtResource("2_tell")
+
+[node name="Combat" type="Node2D" parent="."]
+
+[node name="Health" type="Node" parent="Combat"]
+script = ExtResource("3_health")
+max_hp = 40
+
+[node name="Hurtbox" type="Area2D" parent="Combat"]
+collision_layer = 16
+collision_mask = 0
+monitoring = false
+script = ExtResource("4_hurt")
+health = NodePath("../Health")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/Hurtbox"]
+shape = SubResource("Circ_hurt")
+
+[node name="Audio" type="Node2D" parent="."]
+
+[node name="Needle" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_needle")
+volume_db = -8.0
+max_polyphony = 2
+
+[node name="Charge" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_charge")
+volume_db = -5.0
+max_distance = 2000.0
+
+[node name="Cue" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_cue")
+volume_db = -1.0
+max_distance = 2400.0
+
+[node name="Beam" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_beam")
+max_distance = 2400.0
+
+[node name="Death" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_death")
+volume_db = -6.0
+
+[node name="Spawn" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_spawn")
+volume_db = -12.0

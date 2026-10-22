@@ -19,6 +19,7 @@ const KEYS := {
 	&"parry_success": [[0.0, -78.0], [0.05, -150.0], [0.22, -60.0]],
 	&"cast": [[0.0, -70.0], [0.05, -95.0], [0.1, -8.0], [0.26, 6.0]],
 	&"dash_slash": [[0.0, 168.0], [0.03, 176.0], [0.12, -4.0], [0.28, 8.0]],
+	&"cast_up": [[0.0, -30.0], [0.06, -105.0], [0.15, -92.0], [0.35, -86.0]],
 	&"dash": [[0.0, 120.0], [0.06, 172.0]],
 	&"hurt": [[0.0, 60.0], [0.1, 100.0]],
 	&"dead": [[0.0, 90.0], [0.3, 115.0]],
@@ -81,6 +82,11 @@ func tick(delta: float, vel: Vector2, on_floor: bool, run_speed: float) -> void:
 			target = _keyed(KEYS[anim], _t)
 			snap = true
 			frame_i = Frame.DASH if _t >= 0.05 and _t < 0.18 else Frame.IDLE
+		&"cast_up":
+			# 벼락: 검을 하늘로 치켜든다
+			target = _keyed(KEYS[anim], _t)
+			snap = true
+			frame_i = Frame.IDLE if on_floor else Frame.FALL
 		&"dash_slash":
 			# 대시 참격: 뒤로 끌던 검을 앞으로 수평에 가깝게 쓸어 벤다
 			target = _keyed(KEYS[anim], _t)

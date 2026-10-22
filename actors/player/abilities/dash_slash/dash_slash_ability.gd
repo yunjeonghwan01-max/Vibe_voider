@@ -11,7 +11,7 @@ signal hit_landed(hurtbox: HurtboxComponent)
 @export var cooldown: float = 0.9
 @export var damage: int = 15                  # 평타 1타(10)의 1.5배
 @export var knockback: float = 240.0
-@export var reach_offset: float = 72.0        # Hitbox 중심이 몸 앞쪽으로 떨어진 거리 (오른쪽 기준)
+@export var reach_offset: float = 116.0       # Hitbox 중심이 몸 앞쪽으로 떨어진 거리 (오른쪽 기준, 판정 길이 260 → 앞으로 약 246까지)
 @export var effect_scene: PackedScene
 
 @onready var hitbox: HitboxComponent = $Hitbox

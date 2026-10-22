@@ -7,9 +7,12 @@ extends Node2D
 
 @export var grunt_scene: PackedScene
 @export var duelist_scene: PackedScene
+@export var watcher_scene: PackedScene
 @export var grunt_count: int = 4
 @export var grunt_respawn_delay: float = 2.5
 @export var duelist_respawn_delay: float = 6.0
+@export var watcher_respawn_delay: float = 7.0
+@export var watcher_fly_bounds: Rect2 = Rect2(-740.0, -620.0, 1480.0, 520.0)   # 감시자가 날 수 있는 방 안쪽
 @export var sky_parallax: float = 0.35          # 1보다 작을수록 멀리 있는 것처럼 느리게 움직인다
 @export var foreground_parallax: float = 0.18   # 전경은 카메라보다 빠르게 지나간다
 @export var min_spawn_distance: float = 280.0   # 플레이어 바로 옆에서 튀어나오지 않게
@@ -28,6 +31,7 @@ var _spawn_points: Array[Vector2] = [
 	Vector2(-660, -30), Vector2(-380, -30), Vector2(380, -30), Vector2(660, -30), Vector2(-120, -30), Vector2(120, -30),
 ]
 var _duelist_spawn_points: Array[Vector2] = [Vector2(560, -40), Vector2(-560, -40)]
+var _watcher_spawn_points: Array[Vector2] = [Vector2(-520, -320), Vector2(520, -320)]
 
 
 func _ready() -> void:
@@ -44,6 +48,7 @@ func _ready() -> void:
 	for i in grunt_count:
 		_spawn_grunt(_spawn_points[[0, 3, 1, 2][i % 4]])
 	_spawn_duelist(_duelist_spawn_points[0])
+	_spawn_watcher(_watcher_spawn_points[1])
 
 
 func _process(_delta: float) -> void:
@@ -78,6 +83,23 @@ func _spawn_duelist(pos: Vector2) -> void:
 	actors.add_child(d)
 	d.add_to_group("enemy")
 	d.defeated.connect(_on_duelist_defeated)
+
+
+func _spawn_watcher(pos: Vector2) -> void:
+	if watcher_scene == null:
+		return
+	var w := watcher_scene.instantiate() as Watcher
+	w.position = pos
+	w.fly_bounds = watcher_fly_bounds
+	actors.add_child(w)
+	w.add_to_group("enemy")
+	w.defeated.connect(_on_watcher_defeated)
+
+
+func _on_watcher_defeated(_e: Enemy) -> void:
+	await get_tree().create_timer(watcher_respawn_delay).timeout
+	if is_instance_valid(self) and is_inside_tree():
+		_spawn_watcher(_pick_spawn(_watcher_spawn_points))
 
 
 func _on_grunt_defeated(_e: Enemy) -> void:

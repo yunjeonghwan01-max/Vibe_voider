@@ -194,6 +194,18 @@ func is_glinting() -> bool:
 	return _glinting and state == State.ACTIVE
 
 
+# ─────────────────────────── 카유공 (카운터 유도 공격) ───────────────────────────
+## 방향과 무관하게 반격 키 한 번으로 받아칠 수 있는 창이 열려 있는가. 쓰는 적(Watcher)이 오버라이드한다.
+## Player는 그룹 "counter_threat"의 적 중 이것이 true인 적을 반격한다.
+func is_counter_open() -> bool:
+	return false
+
+
+## 카유공을 반격당했을 때 호출된다 (공격 취소 + 결정타를 기다리는 경직). 결정타 데미지는 반격한 쪽이 준다.
+func on_countered(_from_pos: Vector2) -> void:
+	pass
+
+
 # ─────────────────────────── 등장 ───────────────────────────
 func _begin_spawn() -> void:
 	state = State.SPAWNING

@@ -1,0 +1,29 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://actors/player/abilities/lightning/lightning_bolt.gd" id="1_bolt"]
+[ext_resource type="Script" path="res://combat/components/hitbox/hitbox.gd" id="2_hit"]
+[ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="3_spark"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/lightning.wav" id="a_strike"]
+
+[node name="LightningBolt" type="Node2D"]
+z_index = 1
+script = ExtResource("1_bolt")
+spark_scene = ExtResource("3_spark")
+
+[node name="Hitbox" type="Area2D" parent="."]
+collision_layer = 32
+collision_mask = 16
+monitoring = false
+script = ExtResource("2_hit")
+damage = 20
+apply_on_contact = false
+
+[node name="Path" type="CollisionShape2D" parent="Hitbox"]
+
+[node name="Area" type="CollisionShape2D" parent="Hitbox"]
+
+[node name="Audio" type="Node2D" parent="."]
+
+[node name="Strike" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_strike")
+max_distance = 3000.0

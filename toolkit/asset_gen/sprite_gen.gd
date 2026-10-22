@@ -14,7 +14,7 @@ var rng := RandomNumberGenerator.new()
 
 func _init() -> void:
 	rng.seed = 7
-	for dir in ["characters/player", "characters/grunt", "characters/duelist", "environment", "effects"]:
+	for dir in ["characters/player", "characters/grunt", "characters/duelist", "characters/watcher", "environment", "effects"]:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT + dir))
 	_gen_player()
 	_gen_grunt()
@@ -22,6 +22,7 @@ func _init() -> void:
 	_gen_room()
 	_gen_props()
 	_gen_effects()   # 맨 뒤에 둔다 — rng 소비 순서가 바뀌면 기존 그림이 달라진다
+	_gen_watcher()   # 새 생성기는 항상 이 아래에 추가한다 (같은 이유)
 	print("[sprite_gen] done")
 	quit()
 
@@ -995,3 +996,174 @@ func _void_orb_frame(f: int) -> Image:
 		var dd := rng.randf_range(r * 0.5, r - 3.0)
 		_put(img, int(cx + cos(a) * dd), int(cy + sin(a) * dd), hot)
 	return img
+
+
+# ═══════════════════════════════ 감시자 (공중 원거리 중간 보스 — 공허의 감시자) ═══════════════════════════════
+## 잡몹보다 한 급 위의 위엄: 금장 테두리 갑각, 금빛 가시 왕관 + 떠 있는 후광, 두 쌍의 칼날깃 날개,
+## 큰 외눈 주위의 작은 눈 넷, 아래로 늘어진 척추 꼬리와 보석. 프레임 순서는 watcher.gd의 Frame enum과 맞춘다.
+## 캔버스 72x60, 큰 눈의 중심 = (36, 27) → 씬에서 Body를 (0, 6)에 두면 눈이 루트 원점에 온다.
+func _gen_watcher() -> void:
+	var specs := [
+		{"wing": 0},                              # 0 idle a (날개 위)
+		{"wing": 1, "dy": 1},                     # 1 idle b (날개 아래)
+		{"wing": 0, "eye": "aim"},                # 2 조준 (눈을 가늘게, 붉게)
+		{"wing": 1, "eye": "wide", "dx": -1},     # 3 발사 반동
+		{"wing": 2, "eye": "charge"},             # 4 카유공 충전 (날개 활짝, 온몸의 눈이 빛남)
+		{"wing": 1, "eye": "x", "dy": 1},         # 5 피격
+	]
+	var frames: Array[Image] = []
+	for s in specs:
+		frames.append(_watcher_frame(s))
+	_save(_sheet(frames), "characters/watcher/watcher.png")
+
+
+func _watcher_frame(p: Dictionary) -> Image:
+	var img := _new(72, 60)
+	var shell := _c(52, 32, 76)
+	var shell_top := _c(82, 54, 112)
+	var shell_dark := _c(28, 16, 42)
+	var socket := _c(18, 8, 24)
+	var wing := _c(54, 24, 80)
+	var wing_edge := _c(112, 72, 156)
+	var gold := _c(226, 176, 72)
+	var gold_d := _c(150, 98, 40)
+	var bone := _c(198, 176, 150)
+	var gem := _c(236, 70, 90)
+	var sclera := _c(236, 226, 204)
+	var iris := _c(255, 206, 60)
+	var iris_d := _c(222, 120, 30)
+	var pupil := _c(20, 8, 24)
+	var hot := _c(255, 244, 196)
+	var eye_mode: String = p.get("eye", "open")
+	var cx: float = 36.0 + p.get("dx", 0.0)
+	var cy: float = 27.0 + p.get("dy", 0.0)
+	var w: int = p.get("wing", 0)
+
+	# ── 척추 꼬리 + 보석 (가장 뒤)
+	var sway := 1.0 if w == 1 else -1.0
+	var prev := Vector2(cx, cy + 10.0)
+	for k in 6:
+		var q := Vector2(cx + sin(k * 0.9) * 1.2 * sway, cy + 12.0 + k * 2.4)
+		_line(img, prev, q, 2.0, bone.darkened(0.25))
+		_ellipse(img, q.x, q.y, 2.0 - k * 0.18, 1.3, bone)
+		prev = q
+	_poly(img, PackedVector2Array([prev + Vector2(0, 1), prev + Vector2(2.5, 4), prev + Vector2(0, 8), prev + Vector2(-2.5, 4)]), gem)
+	_put(img, int(prev.x), int(prev.y + 3), Color(1, 0.8, 0.85))
+	# 옆 촉수 (금 고리)
+	for side in [-1.0, 1.0]:
+		var a := Vector2(cx + side * 7.0, cy + 8.0)
+		var b := Vector2(cx + side * 9.5 - sway * side, cy + 19.0)
+		var c := Vector2(cx + side * 8.0 + sway * 0.5, cy + 26.0)
+		_line(img, a, b, 1.6, shell_dark)
+		_line(img, b, c, 1.1, shell_dark)
+		_put(img, int(b.x), int(b.y), gold)
+		_put(img, int(b.x) + 1, int(b.y), gold_d)
+
+	# ── 날개: 위 3장(큰 칼날깃) + 아래 2장(작은 깃)
+	var upper := [[-58.0, -34.0, -10.0], [-24.0, -4.0, 16.0], [-44.0, -20.0, 4.0]]
+	var lower := [[24.0, 44.0], [36.0, 58.0], [28.0, 50.0]]
+	var lens := [21.0, 24.0, 17.0]
+	for side in [-1.0, 1.0]:
+		for i in 2:
+			_feather(img, Vector2(cx + side * 9.0, cy + 4.0), lower[w][i], 11.0 - i * 2.0, side, wing, wing_edge, gold, 2.2)
+		for i in 3:
+			_feather(img, Vector2(cx + side * 10.0, cy - 3.0 + i * 1.5), upper[w][i], lens[i], side, wing, wing_edge, gold, 3.2)
+
+	# ── 후광 (떠 있는 금빛 고리) + 가시 왕관
+	for y in range(int(cy - 26), int(cy - 15)):
+		for x in range(int(cx - 13), int(cx + 14)):
+			var nx := (x + 0.5 - cx) / 11.0
+			var ny := (y + 0.5 - (cy - 20.5)) / 3.0
+			var d := nx * nx + ny * ny
+			if d <= 1.0 and d >= 0.45:
+				_put(img, x, y, gold if ny < 0.0 else gold_d)
+	var spikes := [[0.0, 11.0], [-24.0, 8.5], [24.0, 8.5], [-46.0, 6.0], [46.0, 6.0]]
+	for sp in spikes:
+		var ang := deg_to_rad(-90.0 + float(sp[0]))
+		var dir := Vector2.from_angle(ang)
+		var root := Vector2(cx, cy) + dir * 9.5
+		var n := dir.orthogonal()
+		_poly(img, PackedVector2Array([root + n * 1.8, root + dir * float(sp[1]), root - n * 1.8]), gold)
+		_line(img, root + n * 0.8, root + dir * (float(sp[1]) - 1.5), 0.8, gold_d)
+
+	# ── 갑각 몸통 (위는 밝고 아래는 어둡게)
+	var rx := 12.0
+	var ry := 11.0
+	for y in range(floori(cy - ry) - 1, ceili(cy + ry) + 2):
+		for x in range(floori(cx - rx) - 1, ceili(cx + rx) + 2):
+			var nx := (x + 0.5 - cx) / rx
+			var ny := (y + 0.5 - cy) / ry
+			if nx * nx + ny * ny > 1.0:
+				continue
+			var c := shell
+			if ny < -0.45 + nx * 0.2:
+				c = shell_top
+			elif ny > 0.5:
+				c = shell_dark
+			_put(img, x, y, c)
+	# 갑각 판 이음새
+	for side in [-1.0, 1.0]:
+		_line(img, Vector2(cx + side * 9.5, cy - 6.0), Vector2(cx + side * 11.0, cy + 3.0), 0.8, shell_dark)
+	_line(img, Vector2(cx - 4.0, cy + 9.0), Vector2(cx + 4.0, cy + 9.0), 0.8, shell_dark)
+	# 금장 테두리 (눈구멍 둘레)
+	for y in range(int(cy - 9), int(cy + 10)):
+		for x in range(int(cx - 10), int(cx + 11)):
+			var nx := (x + 0.5 - cx) / 8.6
+			var ny := (y + 0.5 - cy) / 7.4
+			var d := nx * nx + ny * ny
+			if d <= 1.0 and d >= 0.66:
+				_put(img, x, y, gold if ny < 0.15 else gold_d)
+	_ellipse(img, cx, cy, 6.8, 5.6, socket)
+
+	# ── 작은 눈 넷
+	var small_col := _c(255, 110, 80) if eye_mode == "aim" else (hot if eye_mode == "charge" else _c(214, 90, 70))
+	if eye_mode == "x":
+		small_col = shell_dark
+	for se in [Vector2(-9, -6), Vector2(9, -6), Vector2(-10, 4), Vector2(10, 4)]:
+		_rect(img, int(cx + se.x) - 1, int(cy + se.y), 2, 1, small_col)
+
+	# ── 큰 외눈
+	var ex := cx
+	var ey := cy
+	match eye_mode:
+		"aim":
+			_ellipse(img, ex, ey, 6.0, 2.0, sclera)
+			_rect(img, int(ex) - 2, int(ey) - 1, 5, 2, _c(255, 90, 56))
+			_rect(img, int(ex) - 7, int(ey) - 3, 14, 1, gold_d)
+		"wide":
+			_ellipse(img, ex, ey, 6.4, 5.4, sclera)
+			_ellipse(img, ex + 0.5, ey, 2.8, 2.8, iris)
+			_rect(img, int(ex), int(ey), 1, 1, pupil)
+		"charge":
+			_ellipse(img, ex, ey, 6.4, 5.4, _c(255, 228, 150))
+			_ellipse(img, ex, ey, 4.2, 3.6, hot)
+			_ellipse(img, ex, ey, 2.0, 2.0, Color(1, 1, 1))
+		"x":
+			for k in range(-4, 5):
+				_put(img, int(ex) + k, int(ey) + k, iris)
+				_put(img, int(ex) + k, int(ey) - k, iris)
+		_:
+			_ellipse(img, ex, ey, 6.0, 4.8, sclera)
+			_ellipse(img, ex + 0.5, ey, 3.6, 4.0, iris)
+			_ellipse(img, ex + 1.0, ey + 1.5, 2.2, 1.5, iris_d)
+			_rect(img, int(ex), int(ey) - 3, 1, 6, pupil)
+			_put(img, int(ex) - 2, int(ey) - 2, Color(1, 1, 0.94))
+			_put(img, int(ex) - 1, int(ey) - 3, Color(1, 1, 0.94))
+	_shade_edges(img, 0.16, 0.22, [sclera, iris, iris_d, pupil, gold, gold_d, gem, hot, small_col, socket,
+			_c(255, 228, 150), _c(255, 90, 56), Color(1, 1, 1), Color(1, 1, 0.94)])
+	_outline(img, _c(8, 4, 14))
+	return img
+
+
+## 칼날깃 하나: root에서 angle_deg 방향(오른쪽 기준, side로 좌우 반전)으로 뻗는 날 모양 깃. 끝은 금빛.
+func _feather(img: Image, root: Vector2, angle_deg: float, length: float, side: float,
+		body: Color, edge: Color, tip: Color, width: float) -> void:
+	var dir := Vector2.from_angle(deg_to_rad(angle_deg))
+	dir.x *= side
+	var n := dir.orthogonal()
+	var end := root + dir * length
+	var pts := PackedVector2Array([root + n * width * 0.6, root + dir * length * 0.55 + n * width,
+			end, root + dir * length * 0.5 - n * width * 0.5, root - n * width * 0.4])
+	_poly(img, pts, body)
+	_line(img, root + n * width * 0.4, end, 0.9, edge)
+	_line(img, root + dir * (length - 3.0), end, 1.2, tip)

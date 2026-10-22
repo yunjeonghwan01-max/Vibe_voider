@@ -15,6 +15,11 @@
 [ext_resource type="PackedScene" path="res://actors/player/abilities/void_orb/void_orb_projectile.tscn" id="10_orb_proj"]
 [ext_resource type="Script" uid="uid://ddhui8cfgt60e" path="res://actors/player/abilities/dash_slash/dash_slash_ability.gd" id="11_ds_ability"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/dash_slash/dash_slash_effect.tscn" id="12_ds_fx"]
+[ext_resource type="PackedScene" path="res://actors/player/abilities/counter_slash/counter_slash.tscn" id="13_counter"]
+[ext_resource type="Script" path="res://actors/player/abilities/lightning/lightning_ability.gd" id="14_lightning"]
+[ext_resource type="PackedScene" path="res://actors/player/abilities/lightning/lightning_bolt.tscn" id="15_bolt"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/dash_slash_ring.wav" id="a_ds_ring"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/dash_slash_hit.wav" id="a_ds_hit"]
 [ext_resource type="AudioStream" uid="uid://cnlltvsiboews" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
 [ext_resource type="AudioStream" uid="uid://dcixlbk3lyuvs" path="res://assets/temporary/audio/dash_slash.wav" id="a_dash_slash"]
 [ext_resource type="AudioStream" uid="uid://f51u2c8am6r2" path="res://assets/temporary/audio/player_death.wav" id="a_death"]
@@ -53,7 +58,7 @@ radius = 36.0
 radius = 72.0
 
 [sub_resource type="RectangleShape2D" id="Rect_dash_slash"]
-size = Vector2(176, 46)
+size = Vector2(260, 50)
 
 [node name="Player" type="CharacterBody2D" unique_id=589987289]
 z_index = 2
@@ -62,6 +67,7 @@ script = ExtResource("1_player")
 slash_scene = ExtResource("6_slash")
 spark_scene = ExtResource("7_spark")
 afterimage_scene = ExtResource("8_after")
+counter_slash_scene = ExtResource("13_counter")
 
 [node name="Visual" type="Node2D" parent="." unique_id=1009679064]
 material = SubResource("Mat_flash")
@@ -142,7 +148,7 @@ cooldown = 3.0
 effect_scene = ExtResource("12_ds_fx")
 
 [node name="Hitbox" type="Area2D" parent="Combat/DashSlash" unique_id=383505832]
-position = Vector2(72, -8)
+position = Vector2(116, -8)
 collision_layer = 32
 collision_mask = 16
 monitoring = false
@@ -151,6 +157,10 @@ damage = 15
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/DashSlash/Hitbox" unique_id=1333878218]
 shape = SubResource("Rect_dash_slash")
+
+[node name="Lightning" type="Node2D" parent="Combat"]
+script = ExtResource("14_lightning")
+bolt_scene = ExtResource("15_bolt")
 
 [node name="Audio" type="Node2D" parent="." unique_id=1525423985]
 
@@ -230,3 +240,13 @@ max_polyphony = 2
 stream = ExtResource("a_dash_slash")
 volume_db = -5.0
 max_polyphony = 2
+
+[node name="DashSlashRing" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_ds_ring")
+volume_db = -4.0
+max_polyphony = 2
+
+[node name="DashSlashHit" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_ds_hit")
+volume_db = -1.0
+max_polyphony = 3
