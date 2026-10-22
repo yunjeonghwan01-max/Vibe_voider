@@ -50,7 +50,7 @@ Godot 엔진의 실제 제약이 이 문서와 충돌하면 **엔진 제약이 �
 - `managers/`: `EnemyManager`, `DoorManager` 같은 객체별 Manager는 만들지 않는다. Manager는 `core/`가 아니다. Autoload로 등록할지는 실제 필요가 생길 때 결정한다.
 - `core/`: "어디 둘지 모르겠다"의 대피소가 아니다. **특정 객체에 속하지 않으며 실제로 여러 영역에서 공통 사용되는가?**에 "예"일 때만 둔다. 그래서 `utils/`는 만들지 않았다.
 - `assets/temporary/`: 임시/AI 생성/플레이스홀더 Asset을 정식 Asset과 섞지 않고 격리한다.
-  - Voider의 현재 픽셀아트와 사운드는 전부 코드로 생성한 것이라 여기 있다 (`characters/`, `environment/`, `audio/`). 생성기는 `toolkit/asset_gen/` (`sprite_gen.gd`, `audio_gen.gd`, 헤드리스 `--script`로 실행, 고정 seed). 외부 에셋이 아니므로 라이선스 문제가 없다. 정식 아트로 교체하면 해당 카테고리 폴더로 옮긴다.
+  - Voider의 현재 픽셀아트와 사운드는 전부 코드로 생성한 것이라 여기 있다 (`characters/`, `environment/`, `effects/`, `audio/`). 생성기는 `toolkit/asset_gen/` (`sprite_gen.gd`, `audio_gen.gd`, 헤드리스 `--script`로 실행, 고정 seed). 외부 에셋이 아니므로 라이선스 문제가 없다. 정식 아트로 교체하면 해당 카테고리 폴더로 옮긴다.
 - `_scenes/`, `_scripts/`, `_resources/`처럼 **파일 형식으로 나누는 폴더**와 거대한 `systems/` 폴더는 만들지 않는다.
 
 ### 판단 기준
@@ -216,7 +216,7 @@ Main (Node)                                   app/main.tscn   (run/main_scene)
 │   │   ├── LedgeLeft / LedgeRight / LedgeTop  one-way 발판
 │   │   └── Foreground (사슬, 시차 스크롤)
 │   ├── Actors (Node2D) └ Player              actors/player/player.tscn
-│   ├── Projectiles (Node2D)                  (런타임 투사체 — 아직 미사용)
+│   ├── Projectiles (Node2D, group "projectiles") 런타임 투사체 (장풍 구체)
 │   ├── Effects (Node2D, group "fx")          슬래시/스파크/잔상이 여기 붙는다
 │   ├── GameCamera (Camera2D)                 camera/game_camera.gd  (follow + lookahead + shake + room_limits)
 │   ├── Vignette (CanvasLayer 1)              화면 가장자리 어둡게
@@ -233,7 +233,10 @@ Player (CharacterBody2D)                       actors/player/player.gd
 ├── Combat (Node2D)
 │   ├── Health / Hurtbox(+CollisionShape2D)
 │   ├── AttackHitbox(+CollisionShape2D)        콤보/궁극기 판정 (code로 on/off·크기·데미지)
-│   └── ParryBox (Area2D, 항상 monitoring)      반격 키를 누른 순간 반짝이는 적 Hitbox를 읽는다
+│   ├── ParryBox (Area2D, 항상 monitoring)      반격 키를 누른 순간 반짝이는 적 Hitbox를 읽는다
+│   ├── VoidOrb (Node2D, VoidOrbAbility)        스킬(E) 장풍: 쿨다운 + 구체 스폰 (abilities/void_orb/)
+│   └── DashSlash (Node2D, DashSlashAbility)    대시+E 대시 참격: 쿨다운 + Hitbox(긴 사각형) + 궤적 (abilities/dash_slash/)
+│       └── Hitbox(+CollisionShape2D)
 └── Audio (AudioStreamPlayer2D들)
 
 Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/
@@ -251,10 +254,18 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/
 
 - `GameFeel` (Autoload, `managers/game_feel.gd`): `hit_stop(duration)` 프리즈 프레임(실시간 복구 타이머), `shake(trauma)`는 `GameCamera.current`로 전달.
 - 전투 손맛(hit-stop/shake/슬래시·스파크·잔상)은 명중·패링·사망 순간에 적용한다. VFX는 외부 이미지 없이 `_draw`로 그린다 (`combat/effects/slash|spark|afterimage/`).
-- 입력 액션(추가분): `player_jump` `player_attack` `player_parry` `player_dash` `player_ultimate` + `player_move_left/right`에 A/D 추가.
+- 입력 액션(추가분): `player_jump` `player_attack` `player_parry` `player_dash` `player_skill`(E) `player_ultimate` + `player_move_left/right`에 A/D 추가.
 - `Toolkit` (`toolkit.gd`): `tool_toggle_hud` / `tool_restart` / `tool_pause`.
 - 적 전용 기술(돌진/참격)은 현재 각 적 스크립트 안에 있다. 두 번째 사용처가 생기면 `combat/attacks/`로 올린다.
 - 플레이어 전투 기술(콤보/패링/대시/궁극기)은 지금은 `player.gd`에 모아 feel을 빠르게 튜닝한다. "장착형 어빌리티" 시스템(두 번째 사용자)이 실제로 생기면 `actors/player/abilities/<name>/`로 분리한다.
+- 스폰물이 있는 스킬은 `actors/player/abilities/<name>/`에 둔다. 첫 스킬 **장풍**(`void_orb/`):
+  - `void_orb_ability.gd` (`Combat/VoidOrb`): 쿨다운·발사. 입력 우선순위와 시전 자세(반동/공중 체공/캔슬)는 `player.gd`의 `Action.SKILL`이 정한다.
+  - `void_orb_projectile.gd/.tscn` (Projectile 프리셋: `Visual` / `Hitbox` / `Collision` / `Audio`): 적 관통 + 다단히트(Hitbox `apply_on_contact = false`, 겹친 적을 `hit_interval`마다 최대 `max_hits_per_target`회 `receive_hit`) + 맞을 때마다 짧은 넉백. `Collision`(mask=world)에 벽이 닿으면 소멸하고, one-way 발판은 통과한다.
+- 두 번째 스킬 **대시 참격**(`dash_slash/`): 대시와 동시에, 또는 대시 중 E → 대시가 끝난 뒤 조금 더 파고들며 수평으로 긴 참격.
+  - `dash_slash_ability.gd` (`Combat/DashSlash`, 자식 `Hitbox`): 쿨다운·판정 설정/on·off·궤적 스폰. 예약·전진·캔슬은 `player.gd`의 `Action.DASH_SLASH`.
+  - `dash_slash_effect.gd/.tscn`: `_draw`로 그리는 수평 칼빛 (스폰물이라 기술 폴더에 둔다).
+  - 입력 규칙: 대시 중 E는 장풍이 아니라 대시 참격 예약이다. E를 먼저 누르고 장풍이 나가기 전(0.06초)에 대시를 누르면 동시 입력으로 보고 대시 참격으로 바꾼다.
+  - 유예 시간(코요테 타임식): 대시를 끝까지 탄 뒤 `dash_slash_grace`(0.12초) 안에 누른 E도 대시 참격이다. 그 뒤의 E는 장풍.
 
 ---
 

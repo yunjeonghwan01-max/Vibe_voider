@@ -17,6 +17,8 @@ const KEYS := {
 	&"attack_3": [[0.0, -160.0], [0.035, -172.0], [0.16, 58.0], [0.3, 30.0]],
 	&"parry": [[0.0, -40.0], [0.05, -78.0], [0.3, -70.0]],
 	&"parry_success": [[0.0, -78.0], [0.05, -150.0], [0.22, -60.0]],
+	&"cast": [[0.0, -70.0], [0.05, -95.0], [0.1, -8.0], [0.26, 6.0]],
+	&"dash_slash": [[0.0, 168.0], [0.03, 176.0], [0.12, -4.0], [0.28, 8.0]],
 	&"dash": [[0.0, 120.0], [0.06, 172.0]],
 	&"hurt": [[0.0, 60.0], [0.1, 100.0]],
 	&"dead": [[0.0, 90.0], [0.3, 115.0]],
@@ -74,6 +76,16 @@ func tick(delta: float, vel: Vector2, on_floor: bool, run_speed: float) -> void:
 			target = _keyed(KEYS[anim], _t)
 			snap = true
 			frame_i = Frame.DASH if _t >= 0.035 and _t < 0.17 else Frame.IDLE
+		&"cast":
+			# 장풍: 검을 뒤로 젖혔다가 앞으로 내지르며 쏜다
+			target = _keyed(KEYS[anim], _t)
+			snap = true
+			frame_i = Frame.DASH if _t >= 0.05 and _t < 0.18 else Frame.IDLE
+		&"dash_slash":
+			# 대시 참격: 뒤로 끌던 검을 앞으로 수평에 가깝게 쓸어 벤다
+			target = _keyed(KEYS[anim], _t)
+			snap = true
+			frame_i = Frame.DASH if _t < 0.2 else Frame.IDLE
 		&"ultimate":
 			target = -90.0 + 1080.0 * (1.0 - pow(1.0 - clampf(_t / 0.4, 0.0, 1.0), 2.0))
 			snap = true

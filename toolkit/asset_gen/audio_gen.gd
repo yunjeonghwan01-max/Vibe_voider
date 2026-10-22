@@ -41,6 +41,10 @@ func _init() -> void:
 	# 환경 / 음악 (루프)
 	_save("fire_loop", _fire_loop(), SR, true)
 	_save("music_loop", _music(), MUSIC_SR, true)
+	# 스킬 — 맨 뒤에 둔다 (rng 소비 순서가 바뀌면 기존 소리가 달라진다)
+	_save("orb_cast", _orb_cast(), SR)
+	_save("orb_hit", _orb_hit(), SR)
+	_save("dash_slash", _swing(0.2, 2300.0, 0.35), SR)   # 대시 참격: 짧고 날카로운 바람 + 약간의 무게
 	print("[audio_gen] done")
 	quit()
 
@@ -529,3 +533,40 @@ func _add_hat(mix: PackedFloat32Array, t: float, amp: float) -> void:
 		var nz := _n()
 		lp += 0.5 * (nz - lp)
 		_wrap_add(mix, start + i, (nz - lp) * exp(-tt * 70.0) * amp)
+
+
+# ═══════════════════════════════ 스킬 ═══════════════════════════════
+## 장풍 발사: 휙 하는 바람 + 위로 솟는 공명음(공허 에너지).
+func _orb_cast() -> PackedFloat32Array:
+	var dur := 0.36
+	var b := _buf(dur)
+	var st := SVF.new()
+	var phase := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var u := t / dur
+		var env := minf(t / 0.012, 1.0) * pow(1.0 - u, 1.6)
+		var fc := 700.0 + 2600.0 * sin(PI * minf(u * 1.4, 1.0))
+		var wind := st.run(_n(), fc, 0.7).band
+		var f := 180.0 + 520.0 * (1.0 - exp(-t * 14.0))
+		phase += TAU * f / SR
+		var tone := sin(phase) + 0.35 * sin(phase * 2.01) + 0.2 * sin(phase * 0.5)
+		b[i] = (wind * 0.7 + tone * 0.45) * env
+	return _normalize(b, 0.85)
+
+
+## 장풍 다단히트: 짧고 지직거리는 에너지 타격음 (연달아 겹쳐도 거슬리지 않게 짧다).
+func _orb_hit() -> PackedFloat32Array:
+	var dur := 0.13
+	var b := _buf(dur)
+	var st := SVF.new()
+	var phase := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var env := exp(-t * 32.0)
+		var f := 140.0 + 700.0 * exp(-t * 40.0)
+		phase += TAU * f / SR
+		var thump := signf(sin(phase)) * 0.35 + sin(phase) * 0.5
+		var crack := st.run(_n(), 2400.0, 0.5).band * exp(-t * 70.0)
+		b[i] = (thump + crack * 1.2) * env
+	return _normalize(b, 0.8)

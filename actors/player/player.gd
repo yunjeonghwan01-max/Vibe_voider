@@ -4,7 +4,7 @@ extends CharacterBody2D
 ## 떠돌이 검사(검은 고양이). 빠르고 반응 좋은 이동 + 근접 전투의 핵심.
 ##
 ## 이동:  달리기(가감속) / 점프(코요테 타임 + 점프 버퍼 + 가변 높이) / 대시(무적·잔상)
-## 전투:  3연속 참격 콤보 / 반격(패링) / 궁극기(전투로 충전, 수동 발동)
+## 전투:  3연속 참격 콤보 / 반격(패링) / 스킬(E: 장풍, 대시+E: 대시 참격) / 궁극기(전투로 충전, 수동 발동)
 ##
 ## 반격 규칙: 적이 공격 직전 0.4초 동안 금빛으로 "반짝"인다. 그 순간 반격 키를 눌러야만 성공한다.
 ##   - 누른 순간 ParryBox 안에 반짝이는 적의 공격 판정이 있으면 성공 → 적 경직, 공격 취소.
@@ -18,7 +18,7 @@ signal ultimate_changed(charge: float, max_charge: float)
 signal ultimate_ready_changed(is_ready: bool)
 signal died
 
-enum Action { NONE, ATTACK, PARRY, DASH, ULTIMATE, HURT, DEAD }
+enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD }
 
 # ─────────────────────────── 이동 튜닝 ───────────────────────────
 @export_group("Movement")
@@ -57,6 +57,20 @@ enum Action { NONE, ATTACK, PARRY, DASH, ULTIMATE, HURT, DEAD }
 @export var parry_whiff_time: float = 0.3        # 헛반격 경직 (무적 없음)
 @export var parry_whiff_cooldown: float = 0.5    # 헛반격 후 재입력 금지 — 반짝임(0.4초)보다 길어서 연타가 안 통한다
 
+@export_group("Skill")
+@export var skill_windup: float = 0.06         # 손을 내지르는 순간 발사
+@export var skill_time: float = 0.24           # 시전 자세 전체 길이 (발사 후에는 대시로 끊을 수 있다)
+@export var skill_recoil: float = 170.0        # 쏘는 반동으로 살짝 뒤로 밀린다
+@export var skill_air_hang: float = 0.14       # 공중에서 쏘면 이 시간 동안 멈춰 떠 있는다
+@export var ult_charge_on_skill_hit: float = 3.0
+
+@export_group("Dash Slash")
+@export var dash_slash_lunge: float = 480.0    # 대시가 끝난 뒤 조금 더 파고드는 속도
+@export var dash_slash_grace: float = 0.12     # 대시가 끝난 뒤에도 이 시간 안에 E를 누르면 대시 참격 (코요테 타임처럼)
+@export var dash_slash_windup: float = 0.03
+@export var dash_slash_active: float = 0.1
+@export var dash_slash_recovery: float = 0.15
+
 @export_group("Ultimate")
 @export var ultimate_max: float = 100.0
 @export var ult_charge_on_parry: float = 34.0
@@ -78,6 +92,8 @@ enum Action { NONE, ATTACK, PARRY, DASH, ULTIMATE, HURT, DEAD }
 @onready var attack_hitbox: HitboxComponent = $Combat/AttackHitbox
 @onready var attack_shape: CollisionShape2D = $Combat/AttackHitbox/CollisionShape2D
 @onready var parry_box: Area2D = $Combat/ParryBox
+@onready var void_orb: VoidOrbAbility = $Combat/VoidOrb
+@onready var dash_slash: DashSlashAbility = $Combat/DashSlash
 @onready var sfx_swing: Array[AudioStreamPlayer2D] = [
 	$Audio/Swing1 as AudioStreamPlayer2D, $Audio/Swing2 as AudioStreamPlayer2D, $Audio/Swing3 as AudioStreamPlayer2D]
 @onready var sfx_hit: AudioStreamPlayer2D = $Audio/Hit
@@ -92,6 +108,8 @@ enum Action { NONE, ATTACK, PARRY, DASH, ULTIMATE, HURT, DEAD }
 @onready var sfx_death: AudioStreamPlayer2D = $Audio/Death
 @onready var sfx_ult_cast: AudioStreamPlayer2D = $Audio/UltCast
 @onready var sfx_ult_hit: AudioStreamPlayer2D = $Audio/UltHit
+@onready var sfx_orb_cast: AudioStreamPlayer2D = $Audio/OrbCast
+@onready var sfx_dash_slash: AudioStreamPlayer2D = $Audio/DashSlash
 
 # ─────────────────────────── 상태 ───────────────────────────
 var facing: float = 1.0
@@ -111,6 +129,9 @@ var _combo_timer: float = 0.0        # 콤보 연결 유지 타이머
 var _attack_buffered: bool = false
 var _hitbox_live: bool = false       # 이번 스윙에서 판정이 켜졌는지
 var _parry_success: bool = false
+var _skill_fired: bool = false
+var _dash_slash_queued: bool = false   # 대시 중 E 입력 → 대시가 끝나면 대시 참격
+var _dash_slash_window: float = 0.0    # 대시 직후 대시 참격 유예 시간 (남은 초)
 
 var _squash: Vector2 = Vector2.ONE   # 스쿼시&스트레치
 var _attack_hitbox_base_pos: Vector2
@@ -127,6 +148,9 @@ func _ready() -> void:
 	health.died.connect(_on_died)
 	attack_hitbox.hit_landed.connect(_on_attack_landed)
 	visual.footstep.connect(_on_footstep)
+	void_orb.hit_landed.connect(_on_skill_hit)
+	void_orb.ready_again.connect(_on_skill_ready)
+	dash_slash.hit_landed.connect(_on_dash_slash_landed)
 
 	attack_hitbox.source = self
 	attack_hitbox.monitoring = false
@@ -153,6 +177,10 @@ func _physics_process(delta: float) -> void:
 			_process_attack(delta)
 		Action.PARRY:
 			_process_parry(delta)
+		Action.SKILL:
+			_process_skill(delta)
+		Action.DASH_SLASH:
+			_process_dash_slash(delta)
 		Action.ULTIMATE:
 			_process_ultimate(delta)
 		Action.HURT:
@@ -179,6 +207,7 @@ func _tick_timers(delta: float) -> void:
 	_jump_buffer = maxf(_jump_buffer - delta, 0.0)
 	_dash_cd = maxf(_dash_cd - delta, 0.0)
 	_parry_cd = maxf(_parry_cd - delta, 0.0)
+	_dash_slash_window = maxf(_dash_slash_window - delta, 0.0)
 	if _combo_timer > 0.0:
 		_combo_timer = maxf(_combo_timer - delta, 0.0)
 		if _combo_timer == 0.0:
@@ -187,13 +216,24 @@ func _tick_timers(delta: float) -> void:
 
 # ─────────────────────── 자유 상태(이동/입력) ───────────────────────
 func _process_free(delta: float) -> void:
-	# 액션 입력 우선순위: 궁극기 > 반격 > 대시 > 공격 > 점프
+	# 액션 입력 우선순위: 궁극기 > 반격 > (대시+스킬 동시 = 대시 참격) > 스킬 > 대시 > 공격 > 점프
 	# (반격은 타이밍이 생명이라 다른 입력에 밀리지 않게 앞에 둔다)
 	if Input.is_action_just_pressed("player_ultimate") and is_ultimate_ready():
 		_start_ultimate()
 		return
 	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
 		_start_parry()
+		return
+	if Input.is_action_just_pressed("player_dash") and Input.is_action_just_pressed("player_skill") \
+			and _can_dash() and dash_slash.can_use():
+		_start_dash()                    # 같은 프레임의 E는 _start_dash가 대시 참격으로 예약한다
+		return
+	# 대시가 막 끝난 유예 시간 안의 E는 장풍이 아니라 대시 참격
+	if Input.is_action_just_pressed("player_skill") and _dash_slash_window > 0.0 and dash_slash.can_use():
+		_start_dash_slash()
+		return
+	if Input.is_action_just_pressed("player_skill") and void_orb.can_cast():
+		_start_skill()
 		return
 	if Input.is_action_just_pressed("player_dash") and _can_dash():
 		_start_dash()
@@ -271,6 +311,9 @@ func _start_dash() -> void:
 	visual.play(&"dash")
 	_sfx(sfx_dash, 0.06)
 	_spawn_afterimage()
+	_dash_slash_queued = false
+	if Input.is_action_just_pressed("player_skill"):
+		_queue_dash_slash()
 
 
 func _process_dash(delta: float) -> void:
@@ -279,8 +322,10 @@ func _process_dash(delta: float) -> void:
 	velocity.x = facing * dash_speed
 	if fmod(_action_time, 0.035) < delta:
 		_spawn_afterimage()
-	# 대시 중 공격 입력 → 대시 공격으로 캔슬(스타일리시), 반격 입력 → 반격
-	if Input.is_action_just_pressed("player_attack"):
+	# 대시 중 스킬 입력 → 대시가 끝나면 대시 참격(예약), 공격 입력 → 대시 공격으로 캔슬, 반격 입력 → 반격
+	if Input.is_action_just_pressed("player_skill"):
+		_queue_dash_slash()
+	if Input.is_action_just_pressed("player_attack") and not _dash_slash_queued:
 		_end_dash()
 		_start_attack(0)
 		return
@@ -289,11 +334,17 @@ func _process_dash(delta: float) -> void:
 		_start_parry()
 		return
 	if _action_time >= dash_time:
+		var queued := _dash_slash_queued
 		_end_dash()
+		if queued and dash_slash.can_use():
+			_start_dash_slash()
+		else:
+			_dash_slash_window = dash_slash_grace   # 대시를 끝까지 탔으면 잠깐 더 받아준다
 
 
 func _end_dash() -> void:
 	action = Action.NONE
+	_dash_slash_queued = false
 	hurtbox.invincible = false
 	trail.visible = false
 	velocity.x *= 0.5
@@ -357,6 +408,11 @@ func _process_attack(delta: float) -> void:
 		_end_attack()
 		_start_dash()
 		return
+	# 판정이 끝난 뒤(후딜)에는 장풍으로 이어 쏠 수 있다 — 베고 바로 쏘는 콤보
+	if _action_time >= active_end and Input.is_action_just_pressed("player_skill") and void_orb.can_cast():
+		_end_attack()
+		_start_skill()
+		return
 
 	var total := swing_windup + swing_active + swing_recovery
 	if _action_time >= total:
@@ -408,6 +464,150 @@ func _spawn_impact(pos: Vector2) -> void:
 	s.global_position = pos
 	s.burst(Color(1.0, 0.85, 1.0, 1.0), 22, 360.0, 0.0, 110.0, 0.34)
 	s.with_ring(Color(0.9, 0.7, 1.0, 1.0), 120.0)
+
+
+# ─────────────────────────── 스킬: 장풍 ───────────────────────────
+func _start_skill() -> void:
+	action = Action.SKILL
+	_action_time = 0.0
+	_skill_fired = false
+	var dir := _move_input()
+	if absf(dir) > 0.01:
+		facing = signf(dir)
+	velocity.x *= 0.3
+	if not is_on_floor():
+		velocity.y = 0.0               # 공중 시전: 잠깐 멈춰 떠서 쏜다
+	_squash = Vector2(0.86, 1.14)
+	visual.play(&"cast")
+
+
+func _process_skill(delta: float) -> void:
+	_action_time += delta
+	if is_on_floor():
+		velocity.x = move_toward(velocity.x, 0.0, ground_friction * 0.5 * delta)
+	else:
+		velocity.x = move_toward(velocity.x, 0.0, air_friction * delta)
+	if is_on_floor() or _action_time >= skill_air_hang:
+		_apply_gravity(delta)
+	else:
+		velocity.y = 0.0
+
+	# 쏘기 직전에 대시가 들어오면 "E와 대시를 거의 동시에" 누른 것 → 장풍 대신 대시 참격
+	if not _skill_fired and Input.is_action_just_pressed("player_dash") and _can_dash() and dash_slash.can_use():
+		_start_dash()
+		_queue_dash_slash()
+		return
+	if not _skill_fired and _action_time >= skill_windup:
+		_fire_skill()
+
+	# 발사 후에는 대시/반격으로 끊을 수 있다
+	if _skill_fired:
+		if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+			_start_parry()
+			return
+		if Input.is_action_just_pressed("player_dash") and _can_dash():
+			_start_dash()
+			return
+	if _action_time >= skill_time:
+		action = Action.NONE
+		visual.play(&"locomotion")
+
+
+func _fire_skill() -> void:
+	_skill_fired = true
+	void_orb.cast(self, facing)
+	velocity.x = -facing * skill_recoil  # 쏘는 반동
+	_squash = Vector2(1.28, 0.82)
+	GameFeel.shake(0.14)
+	_sfx(sfx_orb_cast, 0.06)
+	_set_flash(Color(0.75, 0.55, 1.0), 0.6)
+	_spawn_spark(global_position + Vector2(facing * 34.0, -8.0), Color(0.85, 0.7, 1.0, 1.0), 8, 70.0,
+			0.0 if facing > 0.0 else 180.0, 40.0)
+
+
+func _on_skill_hit(_hurt: HurtboxComponent) -> void:
+	_add_ultimate(ult_charge_on_skill_hit)
+
+
+func _on_skill_ready() -> void:
+	# 쿨다운이 끝났다는 신호 — 몸이 은은하게 보랏빛으로 한 번 빛난다
+	if action != Action.DEAD and _flash_amount < 0.3:
+		_set_flash(Color(0.75, 0.55, 1.0), 0.4)
+
+
+# ─────────────────────────── 스킬: 대시 참격 ───────────────────────────
+func _queue_dash_slash() -> void:
+	if _dash_slash_queued or not dash_slash.can_use():
+		return
+	_dash_slash_queued = true
+	_set_flash(Color(0.9, 0.8, 1.0), 0.55)   # 예약됐다는 작은 신호
+
+
+func _start_dash_slash() -> void:
+	action = Action.DASH_SLASH
+	_dash_slash_window = 0.0
+	_action_time = 0.0
+	_hitbox_live = false
+	velocity = Vector2(facing * dash_slash_lunge, 0.0)
+	_squash = Vector2(1.32, 0.78)
+	trail.visible = true
+	dash_slash.begin(self, facing)
+	visual.play(&"dash_slash")
+	_sfx(sfx_dash_slash, 0.06)
+	_spawn_afterimage()
+
+
+func _process_dash_slash(delta: float) -> void:
+	_action_time += delta
+	var active_start := dash_slash_windup
+	var active_end := dash_slash_windup + dash_slash_active
+
+	# 앞으로 미끄러지듯 파고들었다가 감속. 베는 동안은 공중에서도 떨어지지 않는다(대시의 연장).
+	var friction := ground_friction * 0.55 if is_on_floor() else air_friction * 2.0
+	velocity.x = move_toward(velocity.x, 0.0, friction * delta)
+	if _action_time < active_end:
+		velocity.y = 0.0
+	else:
+		_apply_gravity(delta)
+
+	if _action_time >= active_start and _action_time < active_end and not _hitbox_live:
+		_hitbox_live = true
+		dash_slash.set_active(true)
+	elif _action_time >= active_end and _hitbox_live:
+		_hitbox_live = false
+		dash_slash.set_active(false)
+		trail.visible = false
+
+	# 후딜에는 반격/평타로 이어갈 수 있다
+	if _action_time >= active_end:
+		if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+			_end_dash_slash()
+			_start_parry()
+			return
+		if Input.is_action_just_pressed("player_attack"):
+			_end_dash_slash()
+			_start_attack(0)
+			return
+
+	if _action_time >= active_end + dash_slash_recovery:
+		_end_dash_slash()
+		visual.play(&"locomotion")
+
+
+func _end_dash_slash() -> void:
+	dash_slash.set_active(false)
+	_hitbox_live = false
+	trail.visible = false
+	action = Action.NONE
+
+
+func _on_dash_slash_landed(hurt: HurtboxComponent) -> void:
+	GameFeel.hit_stop(0.05)
+	GameFeel.shake(0.3)
+	_sfx(sfx_hit_heavy, 0.1)
+	_add_ultimate(ult_charge_on_hit)
+	_spawn_spark(hurt.global_position, Color(0.92, 0.8, 1.0, 1.0), 10, 50.0,
+			0.0 if facing > 0.0 else 180.0, 64.0)
 
 
 # ─────────────────────────── 반격(패링) ───────────────────────────
@@ -567,6 +767,8 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	action = Action.HURT
 	_action_time = 0.0
 	attack_hitbox.monitoring = false
+	dash_slash.set_active(false)
+	_dash_slash_queued = false
 	attack_shape.scale = Vector2.ONE
 	trail.visible = false
 	_set_flash(Color(1.0, 0.35, 0.35), 0.9)
@@ -590,6 +792,8 @@ func _process_hurt(delta: float) -> void:
 func _on_died() -> void:
 	action = Action.DEAD
 	attack_hitbox.monitoring = false
+	dash_slash.set_active(false)
+	_dash_slash_queued = false
 	attack_shape.scale = Vector2.ONE
 	hurtbox.invincible = true
 	trail.visible = false

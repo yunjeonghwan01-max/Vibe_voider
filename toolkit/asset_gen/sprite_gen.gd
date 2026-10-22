@@ -14,13 +14,14 @@ var rng := RandomNumberGenerator.new()
 
 func _init() -> void:
 	rng.seed = 7
-	for dir in ["characters/player", "characters/grunt", "characters/duelist", "environment"]:
+	for dir in ["characters/player", "characters/grunt", "characters/duelist", "environment", "effects"]:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT + dir))
 	_gen_player()
 	_gen_grunt()
 	_gen_duelist()
 	_gen_room()
 	_gen_props()
+	_gen_effects()   # 맨 뒤에 둔다 — rng 소비 순서가 바뀌면 기존 그림이 달라진다
 	print("[sprite_gen] done")
 	quit()
 
@@ -931,3 +932,66 @@ func _gen_chain() -> void:
 		y += 6
 		i += 1
 	_save(img, "environment/chain.png")
+
+
+# ═══════════════════════════════ 이펙트 ═══════════════════════════════
+func _gen_effects() -> void:
+	_gen_void_orb()
+
+
+## 장풍(공허 구체) — 4프레임 회전 시트. 지름 38 아트 픽셀 = 화면 76px (플레이어 키).
+## 팔 두 개짜리 소용돌이라 45°씩 4프레임이면 반 바퀴 = 이음매 없이 반복된다.
+func _gen_void_orb() -> void:
+	var frames: Array[Image] = []
+	for f in 4:
+		frames.append(_void_orb_frame(f))
+	_save(_sheet(frames), "effects/void_orb.png")
+
+
+func _void_orb_frame(f: int) -> Image:
+	var size := 40
+	var img := _new(size, size)
+	var cx := size * 0.5
+	var cy := size * 0.5
+	var r := 19.0
+	var outline := _c(30, 10, 52)
+	var rim := _c(196, 150, 255)
+	var deep := _c(74, 32, 128)
+	var mid := _c(112, 58, 184)
+	var arm := _c(156, 100, 232)
+	var arm_hot := _c(206, 168, 255)
+	var core := _c(222, 196, 255)
+	var hot := _c(255, 248, 255)
+	var spin := f * PI / 4.0
+	for y in size:
+		for x in size:
+			var dx := x + 0.5 - cx
+			var dy := y + 0.5 - cy
+			var d := sqrt(dx * dx + dy * dy)
+			if d > r:
+				continue
+			var c := deep if d > r * 0.62 else mid
+			if d > r - 1.2:
+				c = outline
+			elif d > r - 2.6:
+				c = rim
+			else:
+				# 소용돌이 팔: 각도 + 반지름에 따라 휘어진다
+				var a := atan2(dy, dx)
+				var w := sin(2.0 * (a - spin) + d * 0.34)
+				if d > r * 0.28:
+					if w > 0.82:
+						c = arm_hot
+					elif w > 0.45:
+						c = arm
+				if d < 7.6:
+					c = core
+				if d < 4.2:
+					c = hot
+			img.set_pixel(x, y, c)
+	# 테두리 안쪽에서 반짝이는 점 몇 개 (프레임마다 다르게)
+	for i in 5:
+		var a := rng.randf() * TAU
+		var dd := rng.randf_range(r * 0.5, r - 3.0)
+		_put(img, int(cx + cos(a) * dd), int(cy + sin(a) * dd), hot)
+	return img

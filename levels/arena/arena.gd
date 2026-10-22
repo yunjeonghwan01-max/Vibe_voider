@@ -16,6 +16,7 @@ extends Node2D
 
 @onready var actors: Node2D = $Actors
 @onready var effects: Node2D = $Effects
+@onready var projectiles: Node2D = $Projectiles
 @onready var camera: GameCamera = $GameCamera
 @onready var player: Player = $Actors/Player
 @onready var hud: CanvasLayer = $Hud
@@ -30,9 +31,10 @@ var _duelist_spawn_points: Array[Vector2] = [Vector2(560, -40), Vector2(-560, -4
 
 
 func _ready() -> void:
-	# 적이 찾을 수 있도록 플레이어를 그룹에 넣고, VFX 컨테이너도 그룹에 등록한다.
+	# 적이 찾을 수 있도록 플레이어를 그룹에 넣고, VFX/투사체 컨테이너도 그룹에 등록한다.
 	player.add_to_group("player")
 	effects.add_to_group("fx")
+	projectiles.add_to_group("projectiles")
 
 	camera.target = player
 	hud.bind(player)

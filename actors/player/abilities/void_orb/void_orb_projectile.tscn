@@ -1,0 +1,49 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://actors/player/abilities/void_orb/void_orb_projectile.gd" id="1_proj"]
+[ext_resource type="Texture2D" path="res://assets/temporary/effects/void_orb.png" id="2_orb"]
+[ext_resource type="Script" path="res://combat/components/hitbox/hitbox.gd" id="3_hit"]
+[ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="4_spark"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/orb_hit.wav" id="a_hit"]
+
+[sub_resource type="CircleShape2D" id="Circ_hit"]
+radius = 38.0
+
+[sub_resource type="CircleShape2D" id="Circ_wall"]
+radius = 10.0
+
+[node name="VoidOrbProjectile" type="Node2D"]
+z_index = 5
+script = ExtResource("1_proj")
+spark_scene = ExtResource("4_spark")
+
+[node name="Visual" type="Node2D" parent="."]
+
+[node name="Sprite2D" type="Sprite2D" parent="Visual"]
+scale = Vector2(2, 2)
+texture = ExtResource("2_orb")
+hframes = 4
+
+[node name="Hitbox" type="Area2D" parent="."]
+collision_layer = 32
+collision_mask = 16
+script = ExtResource("3_hit")
+damage = 7
+apply_on_contact = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox"]
+shape = SubResource("Circ_hit")
+
+[node name="Collision" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collision"]
+shape = SubResource("Circ_wall")
+
+[node name="Audio" type="Node2D" parent="."]
+
+[node name="Hit" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_hit")
+volume_db = -4.0
+max_polyphony = 4

@@ -1,31 +1,37 @@
-[gd_scene load_steps=33 format=3 uid="uid://cplayervoider1"]
+[gd_scene format=3 uid="uid://cfpo0llem30uy"]
 
-[ext_resource type="Script" path="res://actors/player/player.gd" id="1_player"]
-[ext_resource type="Script" path="res://actors/player/player_visual.gd" id="2_visual"]
-[ext_resource type="Texture2D" path="res://assets/temporary/characters/player/player_body.png" id="2_body"]
-[ext_resource type="Texture2D" path="res://assets/temporary/characters/player/player_sword.png" id="2_sword"]
-[ext_resource type="Shader" path="res://combat/effects/hit_flash/hit_flash.gdshader" id="2_flash"]
-[ext_resource type="Script" path="res://combat/components/health/health.gd" id="3_health"]
-[ext_resource type="Script" path="res://combat/components/hurtbox/hurtbox.gd" id="4_hurt"]
-[ext_resource type="Script" path="res://combat/components/hitbox/hitbox.gd" id="5_hit"]
-[ext_resource type="PackedScene" path="res://combat/effects/slash/slash.tscn" id="6_slash"]
-[ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="7_spark"]
-[ext_resource type="PackedScene" path="res://combat/effects/afterimage/afterimage.tscn" id="8_after"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/swing_1.wav" id="a_swing1"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/swing_2.wav" id="a_swing2"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/swing_3.wav" id="a_swing3"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/hit.wav" id="a_hit"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/hit_heavy.wav" id="a_hit_heavy"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/parry.wav" id="a_parry"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/parry_whiff.wav" id="a_whiff"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/jump.wav" id="a_jump"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/land.wav" id="a_land"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/step.wav" id="a_step"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/player_hurt.wav" id="a_hurt"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/player_death.wav" id="a_death"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/ult_cast.wav" id="a_ult_cast"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/ult_hit.wav" id="a_ult_hit"]
+[ext_resource type="Script" uid="uid://bbdf5xctq8ra0" path="res://actors/player/player.gd" id="1_player"]
+[ext_resource type="Texture2D" uid="uid://cxm2xjvpib4x4" path="res://assets/temporary/characters/player/player_body.png" id="2_body"]
+[ext_resource type="Shader" uid="uid://dfxp8e0ye6t5m" path="res://combat/effects/hit_flash/hit_flash.gdshader" id="2_flash"]
+[ext_resource type="Texture2D" uid="uid://gr4soy27j8d6" path="res://assets/temporary/characters/player/player_sword.png" id="2_sword"]
+[ext_resource type="Script" uid="uid://ccdjsdaja3kky" path="res://actors/player/player_visual.gd" id="2_visual"]
+[ext_resource type="Script" uid="uid://d0v7cuhd24gh0" path="res://combat/components/health/health.gd" id="3_health"]
+[ext_resource type="Script" uid="uid://bx17y8ogjsb4r" path="res://combat/components/hurtbox/hurtbox.gd" id="4_hurt"]
+[ext_resource type="Script" uid="uid://ccskgv0c6im1v" path="res://combat/components/hitbox/hitbox.gd" id="5_hit"]
+[ext_resource type="PackedScene" uid="uid://ccyhs5hooem53" path="res://combat/effects/slash/slash.tscn" id="6_slash"]
+[ext_resource type="PackedScene" uid="uid://cgygv5hooem53" path="res://combat/effects/spark/spark.tscn" id="7_spark"]
+[ext_resource type="PackedScene" uid="uid://dikf12agie0xw" path="res://combat/effects/afterimage/afterimage.tscn" id="8_after"]
+[ext_resource type="Script" uid="uid://xnxfe1b03y28" path="res://actors/player/abilities/void_orb/void_orb_ability.gd" id="9_orb_ability"]
+[ext_resource type="PackedScene" path="res://actors/player/abilities/void_orb/void_orb_projectile.tscn" id="10_orb_proj"]
+[ext_resource type="Script" uid="uid://ddhui8cfgt60e" path="res://actors/player/abilities/dash_slash/dash_slash_ability.gd" id="11_ds_ability"]
+[ext_resource type="PackedScene" path="res://actors/player/abilities/dash_slash/dash_slash_effect.tscn" id="12_ds_fx"]
+[ext_resource type="AudioStream" uid="uid://cnlltvsiboews" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
+[ext_resource type="AudioStream" uid="uid://dcixlbk3lyuvs" path="res://assets/temporary/audio/dash_slash.wav" id="a_dash_slash"]
+[ext_resource type="AudioStream" uid="uid://f51u2c8am6r2" path="res://assets/temporary/audio/player_death.wav" id="a_death"]
+[ext_resource type="AudioStream" uid="uid://dal1g825ak5rk" path="res://assets/temporary/audio/hit.wav" id="a_hit"]
+[ext_resource type="AudioStream" uid="uid://cg05h14a0h1lu" path="res://assets/temporary/audio/hit_heavy.wav" id="a_hit_heavy"]
+[ext_resource type="AudioStream" uid="uid://by35rek6m3idb" path="res://assets/temporary/audio/player_hurt.wav" id="a_hurt"]
+[ext_resource type="AudioStream" uid="uid://censfi8u0utgc" path="res://assets/temporary/audio/jump.wav" id="a_jump"]
+[ext_resource type="AudioStream" uid="uid://d2cbwhbnvildd" path="res://assets/temporary/audio/land.wav" id="a_land"]
+[ext_resource type="AudioStream" uid="uid://8pkomi6pv0s" path="res://assets/temporary/audio/orb_cast.wav" id="a_orb_cast"]
+[ext_resource type="AudioStream" uid="uid://b1ct1pe1ad317" path="res://assets/temporary/audio/parry.wav" id="a_parry"]
+[ext_resource type="AudioStream" uid="uid://cdsnewbdfuog0" path="res://assets/temporary/audio/step.wav" id="a_step"]
+[ext_resource type="AudioStream" uid="uid://die0peq5g204a" path="res://assets/temporary/audio/swing_1.wav" id="a_swing1"]
+[ext_resource type="AudioStream" uid="uid://c4mvfx56wapym" path="res://assets/temporary/audio/swing_2.wav" id="a_swing2"]
+[ext_resource type="AudioStream" uid="uid://htdvifw1ke40" path="res://assets/temporary/audio/swing_3.wav" id="a_swing3"]
+[ext_resource type="AudioStream" uid="uid://0a1j24wchyy1" path="res://assets/temporary/audio/ult_cast.wav" id="a_ult_cast"]
+[ext_resource type="AudioStream" uid="uid://dtdew4h5adovn" path="res://assets/temporary/audio/ult_hit.wav" id="a_ult_hit"]
+[ext_resource type="AudioStream" uid="uid://b21n07qyi6e6w" path="res://assets/temporary/audio/parry_whiff.wav" id="a_whiff"]
 
 [sub_resource type="ShaderMaterial" id="Mat_flash"]
 shader = ExtResource("2_flash")
@@ -46,20 +52,22 @@ radius = 36.0
 [sub_resource type="CircleShape2D" id="Circ_parry"]
 radius = 72.0
 
-[node name="Player" type="CharacterBody2D"]
+[sub_resource type="RectangleShape2D" id="Rect_dash_slash"]
+size = Vector2(176, 46)
+
+[node name="Player" type="CharacterBody2D" unique_id=589987289]
 z_index = 2
 collision_layer = 2
-collision_mask = 1
 script = ExtResource("1_player")
 slash_scene = ExtResource("6_slash")
 spark_scene = ExtResource("7_spark")
 afterimage_scene = ExtResource("8_after")
 
-[node name="Visual" type="Node2D" parent="."]
+[node name="Visual" type="Node2D" parent="." unique_id=1009679064]
 material = SubResource("Mat_flash")
 script = ExtResource("2_visual")
 
-[node name="Body" type="Sprite2D" parent="Visual"]
+[node name="Body" type="Sprite2D" parent="Visual" unique_id=512140028]
 use_parent_material = true
 position = Vector2(0, 27)
 scale = Vector2(2, 2)
@@ -68,7 +76,7 @@ centered = false
 offset = Vector2(-20, -41)
 hframes = 9
 
-[node name="Sword" type="Sprite2D" parent="Visual"]
+[node name="Sword" type="Sprite2D" parent="Visual" unique_id=918879436]
 use_parent_material = true
 position = Vector2(13, 12)
 rotation = 0.38
@@ -77,24 +85,23 @@ texture = ExtResource("2_sword")
 centered = false
 offset = Vector2(-2, -3)
 
-[node name="BodyCollision" type="CollisionShape2D" parent="."]
+[node name="BodyCollision" type="CollisionShape2D" parent="." unique_id=1662719506]
 shape = SubResource("Cap_body")
 
-[node name="Trail" type="Line2D" parent="."]
+[node name="Trail" type="Line2D" parent="." unique_id=298464374]
 visible = false
 width = 11.0
 default_color = Color(0.72, 0.45, 1, 0.45)
+joint_mode = 2
 begin_cap_mode = 2
 end_cap_mode = 2
-joint_mode = 2
 
-[node name="Combat" type="Node2D" parent="."]
+[node name="Combat" type="Node2D" parent="." unique_id=1284561257]
 
-[node name="Health" type="Node" parent="Combat"]
+[node name="Health" type="Node" parent="Combat" unique_id=39277071]
 script = ExtResource("3_health")
-max_hp = 100
 
-[node name="Hurtbox" type="Area2D" parent="Combat"]
+[node name="Hurtbox" type="Area2D" parent="Combat" unique_id=2061819133]
 collision_layer = 8
 collision_mask = 0
 monitoring = false
@@ -102,94 +109,124 @@ script = ExtResource("4_hurt")
 health = NodePath("../Health")
 invincibility_duration = 0.5
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/Hurtbox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/Hurtbox" unique_id=149019720]
 shape = SubResource("Cap_hurt")
 
-[node name="AttackHitbox" type="Area2D" parent="Combat"]
+[node name="AttackHitbox" type="Area2D" parent="Combat" unique_id=393076967]
 position = Vector2(34, -8)
 collision_layer = 32
 collision_mask = 16
 monitoring = false
 script = ExtResource("5_hit")
-damage = 10
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/AttackHitbox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/AttackHitbox" unique_id=383600496]
 shape = SubResource("Circ_attack")
 
-[node name="ParryBox" type="Area2D" parent="Combat"]
+[node name="ParryBox" type="Area2D" parent="Combat" unique_id=604573998]
 position = Vector2(0, -8)
 collision_layer = 0
 collision_mask = 64
 monitorable = false
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/ParryBox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/ParryBox" unique_id=1064838763]
 shape = SubResource("Circ_parry")
 
-[node name="Audio" type="Node2D" parent="."]
+[node name="VoidOrb" type="Node2D" parent="Combat" unique_id=1878108451]
+script = ExtResource("9_orb_ability")
+projectile_scene = ExtResource("10_orb_proj")
+cooldown = 4.0
 
-[node name="Swing1" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="DashSlash" type="Node2D" parent="Combat" unique_id=102687523]
+script = ExtResource("11_ds_ability")
+cooldown = 3.0
+effect_scene = ExtResource("12_ds_fx")
+
+[node name="Hitbox" type="Area2D" parent="Combat/DashSlash" unique_id=383505832]
+position = Vector2(72, -8)
+collision_layer = 32
+collision_mask = 16
+monitoring = false
+script = ExtResource("5_hit")
+damage = 15
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/DashSlash/Hitbox" unique_id=1333878218]
+shape = SubResource("Rect_dash_slash")
+
+[node name="Audio" type="Node2D" parent="." unique_id=1525423985]
+
+[node name="Swing1" type="AudioStreamPlayer2D" parent="Audio" unique_id=1688203788]
 stream = ExtResource("a_swing1")
 volume_db = -8.0
 max_polyphony = 2
 
-[node name="Swing2" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Swing2" type="AudioStreamPlayer2D" parent="Audio" unique_id=1728212612]
 stream = ExtResource("a_swing2")
 volume_db = -8.0
 max_polyphony = 2
 
-[node name="Swing3" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Swing3" type="AudioStreamPlayer2D" parent="Audio" unique_id=800334105]
 stream = ExtResource("a_swing3")
 volume_db = -6.0
 max_polyphony = 2
 
-[node name="Hit" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Hit" type="AudioStreamPlayer2D" parent="Audio" unique_id=1833447925]
 stream = ExtResource("a_hit")
 volume_db = -3.0
 max_polyphony = 4
 
-[node name="HitHeavy" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="HitHeavy" type="AudioStreamPlayer2D" parent="Audio" unique_id=906815392]
 stream = ExtResource("a_hit_heavy")
 volume_db = -2.0
 max_polyphony = 3
 
-[node name="Parry" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Parry" type="AudioStreamPlayer2D" parent="Audio" unique_id=276887976]
 stream = ExtResource("a_parry")
 max_polyphony = 2
 
-[node name="ParryWhiff" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="ParryWhiff" type="AudioStreamPlayer2D" parent="Audio" unique_id=2012721264]
 stream = ExtResource("a_whiff")
 volume_db = -9.0
 
-[node name="Dash" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Dash" type="AudioStreamPlayer2D" parent="Audio" unique_id=840291648]
 stream = ExtResource("a_dash")
 volume_db = -9.0
 
-[node name="Jump" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Jump" type="AudioStreamPlayer2D" parent="Audio" unique_id=1631890073]
 stream = ExtResource("a_jump")
 volume_db = -13.0
 
-[node name="Land" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Land" type="AudioStreamPlayer2D" parent="Audio" unique_id=2060941246]
 stream = ExtResource("a_land")
 volume_db = -12.0
 
-[node name="Step" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Step" type="AudioStreamPlayer2D" parent="Audio" unique_id=2046878736]
 stream = ExtResource("a_step")
 volume_db = -19.0
 max_polyphony = 2
 
-[node name="Hurt" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Hurt" type="AudioStreamPlayer2D" parent="Audio" unique_id=1147396797]
 stream = ExtResource("a_hurt")
 volume_db = -3.0
 
-[node name="Death" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Death" type="AudioStreamPlayer2D" parent="Audio" unique_id=1595907874]
 stream = ExtResource("a_death")
 volume_db = -2.0
 
-[node name="UltCast" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="UltCast" type="AudioStreamPlayer2D" parent="Audio" unique_id=292172105]
 stream = ExtResource("a_ult_cast")
 volume_db = -3.0
 
-[node name="UltHit" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="UltHit" type="AudioStreamPlayer2D" parent="Audio" unique_id=2084339281]
 stream = ExtResource("a_ult_hit")
 volume_db = -4.0
 max_polyphony = 3
+
+[node name="OrbCast" type="AudioStreamPlayer2D" parent="Audio" unique_id=1846123433]
+stream = ExtResource("a_orb_cast")
+volume_db = -5.0
+max_polyphony = 2
+
+[node name="DashSlash" type="AudioStreamPlayer2D" parent="Audio" unique_id=1403422171]
+stream = ExtResource("a_dash_slash")
+volume_db = -5.0
+max_polyphony = 2
