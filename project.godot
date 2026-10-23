@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="pure_vibe_Voider-cm"
+config/name="pure_vibe_Voider"
 run/main_scene="uid://b6iyiseqvt13n"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
