@@ -9,7 +9,7 @@ extends Enemy
 ##   2. 카유공 검기 (RANGED) — 공중으로 떠올라 한 손을 치켜들고 2초 충전(금빛 입자가 손으로 모임) → 0.4초 + 섬광.
 ##      그때 반격 키 = 방향 무관 반격 성공(X자 결정타로 큰 피해 + 추락·경직). 못 받아치면 거의 즉시
 ##      플레이어 몸에 붉은 X자가 새겨지는 강한 확정 피해(대시 무적도 뚫는다).
-##   3. 반격 자세 (GUARD, 쿨타임 12초) — 0.4초 동안 은빛 초승달 방패 자세. 그동안 플레이어 공격이 닿으면
+##   3. 반격 자세 (GUARD, 쿨타임 6초) — 0.4초 동안 은빛 초승달 방패 자세. 그동안 플레이어 공격이 닿으면
 ##      막아내고 → 역반격 창(BAIT): 세상이 거의 멈추고(실제 0.5초) 화면이 어두워지며 부딪힌 자리에 금·은빛 X자
 ##      문장(KnightCross)이 새겨진다. 그 사이 반격 키 = 방향 무관 역반격(X자 결정타 + 긴 경직).
 ##      놓치면 플레이어 머리 위로 순간이동 → 잠깐 멈췄다가(붉은 경고 기둥) 내려찍기. 내려찍기는 반격 불가 — 피해야 한다.
@@ -80,7 +80,7 @@ const DANGER_COLOR := Color(1.0, 0.25, 0.22)
 @export var countered_stun: float = 2.4
 
 @export_group("Counter Stance")
-@export var stance_cooldown: float = 12.0
+@export var stance_cooldown: float = 6.0
 @export var stance_first: float = 5.0
 @export var stance_time: float = 0.4
 @export var stance_range: float = 340.0
