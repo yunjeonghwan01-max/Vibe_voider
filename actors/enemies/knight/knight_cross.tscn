@@ -1,0 +1,23 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://actors/enemies/knight/knight_cross.gd" id="1_cross"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/time_stop.wav" id="a_stop"]
+
+[node name="KnightCross" type="Node2D"]
+z_index = 6
+script = ExtResource("1_cross")
+
+[node name="Dim" type="ColorRect" parent="."]
+z_as_relative = false
+offset_left = -4000.0
+offset_top = -4000.0
+offset_right = 4000.0
+offset_bottom = 4000.0
+mouse_filter = 2
+color = Color(0.04, 0.02, 0.08, 0)
+
+[node name="Audio" type="Node2D" parent="."]
+
+[node name="TimeStop" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_stop")
+max_distance = 3000.0

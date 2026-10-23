@@ -159,6 +159,7 @@ var _chain_t: float = 0.0              # 연쇄 반격 창 남은 시간 (반격
 var _chain_armed: bool = false         # 창 안에서 반격 키를 눌러 예약됨 → 받아칠 게 생기면 자동 반격
 var _chain_skip_press: bool = false    # 창을 연 바로 그 입력으로 예약되지 않게 한 화면 프레임 건너뛴다
 var _chain_count: int = 0              # 이어진 연쇄 수 (반격음이 점점 높아진다)
+var _counter_buffered: bool = false    # 슬로모션 중 화면 프레임에서 받은 방향 무관 반격 입력 (다음 물리 프레임에 쓴다)
 var _skill_fired: bool = false
 var _dash_slash_queued: bool = false   # 대시 중 E 입력 → 대시가 끝나면 대시 참격
 var _dash_slash_window: float = 0.0    # 대시 직후 대시 참격 유예 시간 (남은 초)
@@ -202,6 +203,9 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	# 보스의 역반격 창처럼 세상이 느려진 동안엔 물리 프레임이 드물다 — 그 사이의 반격 입력을 모아 둔다.
+	if Engine.time_scale < 1.0 and Input.is_action_just_pressed("player_parry") and _can_take_counter_press() 			and not _open_counter_threats().is_empty():
+		_counter_buffered = true
 	# 연쇄 반격 입력은 hit-stop(물리 정지) 중에도 놓치지 않도록 화면 프레임마다 읽는다.
 	if _chain_skip_press:
 		_chain_skip_press = false
@@ -214,6 +218,10 @@ func _process(_delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	_tick_timers(delta)
 	_tick_chain(delta)
+	if _counter_buffered:
+		_counter_buffered = false
+		if _can_take_counter_press() and not _open_counter_threats().is_empty():
+			_start_parry()
 
 	match action:
 		Action.DASH:
@@ -863,6 +871,11 @@ func _tick_chain(delta: float) -> void:
 		_chain_t = maxf(_chain_t - delta, 0.0)
 		if _chain_t == 0.0:
 			_chain_armed = false       # 끝까지 받아칠 게 없었다 — 페널티 없이 조용히 끝
+
+
+## 지금 반격 키를 받아 줄 수 있는 상태인가 (피격·궁극기·이미 반격 중·죽음이면 아니다).
+func _can_take_counter_press() -> bool:
+	return _parry_cd <= 0.0 and action not in [Action.PARRY, Action.HURT, Action.ULTIMATE, Action.DEAD]
 
 
 func _has_counter_target() -> bool:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=44 format=3]
+[gd_scene load_steps=45 format=3]
 
 [ext_resource type="Script" path="res://actors/enemies/knight/knight.gd" id="1_knight"]
 [ext_resource type="Script" path="res://combat/effects/counter_tell/counter_tell.gd" id="2_tell"]
@@ -11,6 +11,7 @@
 [ext_resource type="PackedScene" path="res://combat/effects/afterimage/afterimage.tscn" id="9_after"]
 [ext_resource type="PackedScene" path="res://combat/effects/ground_impact/ground_impact.tscn" id="10_impact"]
 [ext_resource type="PackedScene" path="res://combat/attacks/x_slash/x_slash.tscn" id="11_xslash"]
+[ext_resource type="PackedScene" path="res://actors/enemies/knight/knight_cross.tscn" id="15_cross"]
 [ext_resource type="Shader" path="res://combat/effects/hit_flash/hit_flash.gdshader" id="12_flash"]
 [ext_resource type="Texture2D" path="res://assets/temporary/characters/knight/knight.png" id="13_tex"]
 [ext_resource type="Texture2D" path="res://assets/temporary/characters/knight/knight_sword.png" id="14_sword"]
@@ -67,6 +68,7 @@ slash_scene = ExtResource("7_slash")
 afterimage_scene = ExtResource("9_after")
 impact_scene = ExtResource("10_impact")
 xslash_scene = ExtResource("11_xslash")
+cross_scene = ExtResource("15_cross")
 gravity = 2200.0
 move_speed = 110.0
 parry_stagger_time = 1.3

@@ -71,6 +71,7 @@ func _init() -> void:
 	_save("rush_charge", _rush_charge(), SR)
 	_save("boss_death", _boss_death(), SR)
 	_save("boss_music_loop", _boss_music(), MUSIC_SR, true)
+	_save("time_stop", _time_stop(), SR)          # 반격 자세의 역반격 창 (맨 끝에 둬야 앞 소리들의 난수가 그대로다)
 	print("[audio_gen] done")
 	quit()
 
@@ -1099,3 +1100,26 @@ func _boss_music() -> PackedFloat32Array:
 	for i in total:
 		mix[i] = tanh((mix[i] * 0.85 + (wet[i] - mix[i]) * 0.3) * 1.4)
 	return _normalize(mix, 0.8)
+
+
+## 시간이 멎는 소리: 뚝 떨어지는 깊은 저음 "둥" + 길게 늘어지며 떨리는 유리 종 화음 + 거꾸로 빨려 드는 바람.
+func _time_stop() -> PackedFloat32Array:
+	var dur := 1.3
+	var b := _buf(dur)
+	var st := SVF.new()
+	var ph := 0.0
+	var bells := [[1318.5, 0.5], [1975.5, 0.35], [2637.0, 0.25], [3951.0, 0.12]]
+	for i in b.size():
+		var t := float(i) / SR
+		var f := 38.0 + 150.0 * exp(-t * 6.0)
+		ph += TAU * f / SR
+		var boom := sin(ph) * exp(-t * 3.5) * 1.1
+		var wob := 1.0 + 0.004 * sin(TAU * 5.5 * t) * minf(t / 0.3, 1.0)
+		var shimmer := 0.0
+		for bl in bells:
+			shimmer += sin(TAU * bl[0] * wob * t) * bl[1]
+		shimmer *= minf(t / 0.03, 1.0) * exp(-t * 2.2) * 0.7
+		var suck := st.run(_n(), 7000.0 * exp(-t * 4.0) + 300.0, 0.4).band * minf(t / 0.05, 1.0) * exp(-t * 5.0) * 0.6
+		var click := _n() * exp(-t * 500.0) * 0.6
+		b[i] = tanh((boom + shimmer + suck + click) * 1.2)
+	return _normalize(b, 0.85)

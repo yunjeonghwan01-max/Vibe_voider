@@ -10,7 +10,9 @@ extends Enemy
 ##      그때 반격 키 = 방향 무관 반격 성공(X자 결정타로 큰 피해 + 추락·경직). 못 받아치면 거의 즉시
 ##      플레이어 몸에 붉은 X자가 새겨지는 강한 확정 피해(대시 무적도 뚫는다).
 ##   3. 반격 자세 (GUARD, 쿨타임 12초) — 0.4초 동안 은빛 초승달 방패 자세. 그동안 플레이어 공격이 닿으면
-##      막아내고 플레이어 머리 위로 순간이동 → 잠깐 멈췄다가(붉은 경고 기둥) 내려찍기. 반격 불가 — 피해야 한다.
+##      막아내고 → 역반격 창(BAIT): 세상이 거의 멈추고(실제 0.5초) 화면이 어두워지며 부딪힌 자리에 금·은빛 X자
+##      문장(KnightCross)이 새겨진다. 그 사이 반격 키 = 방향 무관 역반격(X자 결정타 + 긴 경직).
+##      놓치면 플레이어 머리 위로 순간이동 → 잠깐 멈췄다가(붉은 경고 기둥) 내려찍기. 내려찍기는 반격 불가 — 피해야 한다.
 ##   4. 돌진 (RUSH, 쿨타임 12초) — 바닥 끝으로 미끄러져 물러난 뒤 웅크려 힘을 모으고(붉은 경로선),
 ##      가속하며 바닥 전체를 돌진한다. 플레이어와 아주 가까워지는 순간만 아주 짧게(0.15초) 반짝인다 —
 ##      그때 반격하면 긴 스턴. 반대쪽 벽에 부딪히면 벽이 깨진다.
@@ -25,7 +27,7 @@ signal landed                      ## 등장 낙하가 땅에 닿은 순간 (레
 enum Atk {
 	IDLE, DASH_IN, WINDUP, GLINT, STRIKE, RECOVER,
 	RISE, CHARGE, WINDOW, DESCEND,
-	GUARD, BLINK, HANG, SLAM_FALL, SLAM_RECOVER,
+	GUARD, BAIT, BLINK, HANG, SLAM_FALL, SLAM_RECOVER,
 	RETREAT, RUSH_WINDUP, RUSH, CRASH,
 	COUNTERED,
 }
@@ -87,6 +89,10 @@ const DANGER_COLOR := Color(1.0, 0.25, 0.22)
 @export var slam_speed: float = 2300.0
 @export var slam_damage: int = 26
 @export var slam_recover: float = 0.85
+@export var bait_time: float = 0.5            # 역반격 창 (실제 시간 초 — 세상은 bait_time_scale로 느려진다)
+@export var bait_time_scale: float = 0.1
+@export var bait_counter_damage: int = 160    # 역반격 성공 X자 결정타
+@export var bait_stun: float = 2.8
 
 @export_group("Rush")
 @export var rush_cooldown: float = 12.0
@@ -109,6 +115,7 @@ const DANGER_COLOR := Color(1.0, 0.25, 0.22)
 @export var afterimage_scene: PackedScene
 @export var impact_scene: PackedScene
 @export var xslash_scene: PackedScene
+@export var cross_scene: PackedScene
 
 @onready var sword: Sprite2D = $Visual/Sword
 @onready var tell: CounterTell = $Tell
@@ -146,6 +153,8 @@ var _after_t: float = 0.0
 var _intro_landed: bool = false
 var _roared: bool = false
 var _danger: float = 0.0            # _draw 경고 연출 맥동용
+var _bait_end_ms: int = 0           # 역반격 창이 닫히는 실제 시각 (세상이 느려지므로 물리 delta로 세지 않는다)
+var _cross: KnightCross = null
 
 
 func _on_ready() -> void:
@@ -291,6 +300,12 @@ func _enemy_ai(delta: float) -> void:
 			elif _t <= 0.0:
 				_end_guard()
 				_to_idle(0.3)
+		Atk.BAIT:
+			velocity = Vector2.ZERO
+			_flash_col = Color(1.0, 0.85, 0.45)
+			_flash_amount = maxf(_flash_amount, 0.55)
+			if Time.get_ticks_msec() >= _bait_end_ms:
+				_end_bait()
 		Atk.BLINK:
 			velocity = Vector2.ZERO
 			_t -= delta
@@ -498,11 +513,16 @@ func _begin_window() -> void:
 func is_counter_open() -> bool:
 	if state != State.ACTIVE:
 		return false
-	return _atk == Atk.WINDOW or (_atk == Atk.RUSH and _rush_window > 0.0)
+	return _atk == Atk.WINDOW or _atk == Atk.BAIT or (_atk == Atk.RUSH and _rush_window > 0.0)
 
 
 func counter_strike_damage(_default_damage: int) -> int:
-	return countered_damage if _atk == Atk.WINDOW else 0
+	match _atk:
+		Atk.WINDOW:
+			return countered_damage
+		Atk.BAIT:
+			return bait_counter_damage
+	return 0
 
 
 ## 받아치지 못했다 — 손에서 검기가 번쩍 날아가 플레이어 몸에 붉은 X자를 새긴다 (확정 피격).
@@ -575,21 +595,37 @@ func _end_guard() -> void:
 	hurtbox.invincible = false
 
 
+## 막았다 → 역반격 창. 세상이 거의 멈춘 채(실제 bait_time초) X자 문장이 새겨지고, 그 사이에만 받아칠 수 있다.
 func _guard_triggered() -> void:
 	_end_guard()
-	hurtbox.invincible = true              # 순간이동 중에는 맞지 않는다 (나타나면 풀린다)
+	hurtbox.invincible = true              # 창·순간이동 중에는 맞지 않는다 (받아치면 on_countered가, 나타나면 풀린다)
 	_sfx(sfx_guard_clang, 0.0)
-	GameFeel.hit_stop(0.1)
+	_sfx(sfx_cue, 0.0)
+	GameFeel.hit_stop(bait_time, bait_time_scale)
 	GameFeel.shake(0.45)
-	GameFeel.flash(Color(0.85, 0.9, 1.0), 0.35, 0.18)
+	GameFeel.flash(Color(1.0, 0.9, 0.65), 0.35, 0.04)   # 게임 시간 0.04초 = 느려진 세상에선 창 내내 옅어진다
 	_flash_col = Color.WHITE
 	_flash_amount = 1.0
+	var clash := global_position + Vector2(facing * 60.0, -40.0)
 	if spark_scene != null:
 		var s := spark_scene.instantiate() as SparkEffect
 		_fx_parent().add_child(s)
-		s.global_position = global_position + Vector2(facing * 60.0, -40.0)
+		s.global_position = clash
 		s.burst(GUARD_COLOR, 18, 360.0, 0.0, 90.0, 0.3)
 		s.with_ring(GUARD_COLOR, 110.0)
+	_atk = Atk.BAIT
+	velocity = Vector2.ZERO
+	_bait_end_ms = Time.get_ticks_msec() + int(bait_time * 1000.0)
+	if cross_scene != null:
+		_cross = cross_scene.instantiate() as KnightCross
+		_cross.window = bait_time
+		_fx_parent().add_child(_cross)
+		_cross.global_position = clash
+
+
+## 역반격 창이 닫혔다 (받아치지 못했다) — 원래대로 순간이동 내려찍기.
+func _end_bait() -> void:
+	_release_cross(false)
 	_atk = Atk.BLINK
 	_t = 0.16
 	_trail(0.0)
@@ -772,6 +808,7 @@ func on_countered(from_pos: Vector2) -> void:
 	if state == State.DEAD:
 		return
 	var was := _atk
+	_release_cross(was == Atk.BAIT)
 	_set_float(false)
 	_end_all_attacks()
 	end_glint()
@@ -781,13 +818,24 @@ func on_countered(from_pos: Vector2) -> void:
 		_rush_stunned(from_pos)
 	else:
 		state = State.STAGGER
-		_state_timer = countered_stun
+		_state_timer = bait_stun if was == Atk.BAIT else countered_stun
 		velocity = Vector2.ZERO
 		visual.scale = Vector2(1.3 * signf(facing), 0.75)
 	_atk = Atk.COUNTERED
 
 
+## X자 문장을 끝낸다: 받아쳤으면 산산이 부서지고, 아니면 식어서 사라진다.
+func _release_cross(shatter: bool) -> void:
+	if is_instance_valid(_cross):
+		if shatter:
+			_cross.shatter()
+		else:
+			_cross.expire()
+	_cross = null
+
+
 func _end_all_attacks() -> void:
+	_release_cross(false)
 	tell.mode = CounterTell.Mode.OFF
 	sfx_charge.stop()
 	sfx_rush_charge.stop()
@@ -931,7 +979,7 @@ func _animate(delta: float) -> void:
 				Atk.DESCEND:
 					frame_i = Frame.DASH
 					target = 100.0
-				Atk.GUARD:
+				Atk.GUARD, Atk.BAIT:
 					frame_i = Frame.GUARD
 					target = -90.0
 					snap = true
@@ -1007,9 +1055,9 @@ func _draw() -> void:
 	if state != State.ACTIVE:
 		return
 	match _atk:
-		Atk.GUARD:
-			var u := 1.0 - clampf(_t / stance_time, 0.0, 1.0)
-			var pulse := 0.6 + 0.4 * sin(_anim_t * 40.0)
+		Atk.GUARD, Atk.BAIT:
+			var u := 1.0 if _atk == Atk.BAIT else 1.0 - clampf(_t / stance_time, 0.0, 1.0)
+			var pulse := 1.0 if _atk == Atk.BAIT else 0.6 + 0.4 * sin(_anim_t * 40.0)
 			var c := Vector2(facing * 30.0, -30.0)
 			var a0 := (0.0 if facing > 0.0 else PI) - 1.25
 			draw_arc(c, 105.0, a0, a0 + 2.5, 24, Color(GUARD_COLOR.r, GUARD_COLOR.g, GUARD_COLOR.b, 0.25 * pulse), 18.0)
