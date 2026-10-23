@@ -844,6 +844,17 @@ func _check_haki() -> void:
 	_set_flash(Color(1.0, 0.25, 0.3), 1.0)
 
 
+## 치트/디버그: 연쇄 반격을 haki_every(3)번 이어 간 것처럼 패기 방출을 바로 터뜨린다 (그 단계의 반격음과 함께).
+func force_chain_burst() -> void:
+	if action == Action.DEAD:
+		return
+	_chain_count = haki_every - 1
+	_sfx(sfx_parry, 0.0)
+	sfx_parry.pitch_scale *= 1.0 + 0.07 * _chain_count
+	_check_haki()
+	_chain_count = 0
+
+
 func _tick_chain(delta: float) -> void:
 	if _chain_armed and _has_counter_target():
 		_start_parry()                 # 받아칠 대상이 있을 때만 부르므로 헛반격이 되지 않는다

@@ -1,3 +1,4 @@
+class_name Arena
 extends Node2D
 
 ## 달빛 성소 — 한 방짜리 전투 공간.
@@ -56,6 +57,7 @@ var _watcher_spawn_points: Array[Vector2] = [Vector2(-520, -320), Vector2(520, -
 func _ready() -> void:
 	# 적이 찾을 수 있도록 플레이어를 그룹에 넣고, VFX/투사체 컨테이너도 그룹에 등록한다.
 	player.add_to_group("player")
+	add_to_group("arena")            # 개발 치트(toolkit/cheats.gd)가 보스를 부를 때 찾는다
 	effects.add_to_group("fx")
 	projectiles.add_to_group("projectiles")
 
@@ -147,7 +149,16 @@ func _on_duelist_defeated(_e: Enemy) -> void:
 
 
 # ─────────────────────────── 보스전 ───────────────────────────
-func _begin_boss() -> void:
+## 치트/디버그: 감시자 처치 수와 상관없이 보스를 바로 부른다 (적 추방은 하고, 지진 대기 없이 곧장 떨어진다).
+## 이미 보스전 중이면 아무것도 하지 않고 false.
+func summon_boss_now() -> bool:
+	if _boss_phase:
+		return false
+	_begin_boss(true)
+	return true
+
+
+func _begin_boss(quick: bool = false) -> void:
 	_boss_phase = true
 	hud.set_tally(0, 0)
 	# 1) 추방 — 남은 적과 바늘이 공허로 빨려 사라진다
@@ -161,6 +172,11 @@ func _begin_boss() -> void:
 	sfx_banish.play()
 	GameFeel.flash(Color(0.45, 0.2, 0.8), 0.3, 0.6)
 	_fade_music(music, -40.0, 1.4, true)
+	if quick:
+		sfx_rumble.play()
+		GameFeel.shake(0.4)
+		_spawn_knight(Vector2(_pick_drop_x(), -980.0))
+		return
 	await get_tree().create_timer(1.0, false).timeout
 	if not is_inside_tree():
 		return
