@@ -217,6 +217,43 @@ func on_countered(_from_pos: Vector2) -> void:
 	pass
 
 
+## 반격한 쪽이 on_countered() 직전에 묻는다: 이번 반격의 X자 결정타 데미지. 0이면 X자 없이 경직만.
+## 기본은 반격한 쪽이 정한 값(감시자 = 즉사). 보스처럼 즉사하면 안 되는 적이 오버라이드한다.
+func counter_strike_damage(default_damage: int) -> int:
+	return default_damage
+
+
+# ─────────────────────────── 추방 ───────────────────────────
+## 싸움 밖으로 내쫓는다 (보스 등장 등). 쓰러뜨린 게 아니므로 defeated를 보내지 않는다 → 다시 나타나지 않는다.
+## 공허로 빨려 들어가듯 위로 늘어나며 사라진다.
+func banish() -> void:
+	if state == State.DEAD:
+		return
+	end_glint()
+	state = State.DEAD
+	hurtbox.monitoring = false
+	hurtbox.set_deferred("monitorable", false)
+	if attack_hitbox != null:
+		attack_hitbox.monitoring = false
+		attack_hitbox.set_deferred("monitorable", false)
+	collision_layer = 0
+	velocity = Vector2.ZERO
+	_on_banished()
+	_burst(Color(0.55, 0.3, 1.0, 1.0), 16, 70.0, 0.45, true)
+	_set_flash(Color(0.7, 0.5, 1.0), 1.0)
+	var sgn := signf(facing) if facing != 0.0 else 1.0
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(visual, "scale", Vector2(0.15 * sgn, 2.2), 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tw.tween_property(visual, "modulate:a", 0.0, 0.35).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(queue_free)
+
+
+## 하위 클래스 추방 훅 (예고 연출/충전음 정리 등).
+func _on_banished() -> void:
+	pass
+
+
 # ─────────────────────────── 등장 ───────────────────────────
 func _begin_spawn() -> void:
 	state = State.SPAWNING

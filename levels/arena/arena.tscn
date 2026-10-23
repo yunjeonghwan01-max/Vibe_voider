@@ -16,6 +16,11 @@
 [ext_resource type="Texture2D" path="res://assets/temporary/environment/banner.png" id="t_banner"]
 [ext_resource type="Texture2D" path="res://assets/temporary/environment/chain.png" id="t_chain"]
 [ext_resource type="AudioStream" path="res://assets/temporary/audio/music_loop.wav" id="a_music"]
+[ext_resource type="PackedScene" path="res://actors/enemies/knight/knight.tscn" id="8_knight"]
+[ext_resource type="PackedScene" path="res://combat/effects/ground_impact/ground_impact.tscn" id="8_impact"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/boss_music_loop.wav" id="a_boss_music"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/banish.wav" id="a_banish"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/rumble.wav" id="a_rumble"]
 
 [sub_resource type="CanvasItemMaterial" id="Mat_add"]
 blend_mode = 1
@@ -62,6 +67,8 @@ script = ExtResource("1_arena")
 grunt_scene = ExtResource("5_grunt")
 duelist_scene = ExtResource("6_duel")
 watcher_scene = ExtResource("6_watcher")
+knight_scene = ExtResource("8_knight")
+impact_scene = ExtResource("8_impact")
 
 [node name="World" type="Node2D" parent="."]
 
@@ -301,3 +308,15 @@ expand_mode = 1
 stream = ExtResource("a_music")
 volume_db = -15.0
 autoplay = true
+
+[node name="BossMusic" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("a_boss_music")
+volume_db = -15.0
+
+[node name="Banish" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("a_banish")
+volume_db = -4.0
+
+[node name="Rumble" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("a_rumble")
+volume_db = -3.0

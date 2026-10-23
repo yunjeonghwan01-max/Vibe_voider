@@ -15,6 +15,10 @@ static var current: GameCamera = null
 ## 방 경계: 이 사각형 바깥이 화면에 보이지 않도록 카메라 중심을 가둔다(크기 0이면 사용 안 함).
 ## Camera2D limit와 달리 흔들림(offset)은 가두지 않아, 경계에 붙어 있어도 흔들림이 온전히 보인다.
 @export var room_limits: Rect2 = Rect2()
+## 함께 화면에 담을 두 번째 대상 (보스 등, 없으면 null). 둘의 중간을 보되 target이 화면 가장자리에서
+## focus_margin 안쪽에 남도록 제한한다 — 멀리 떨어진 보스의 예고 동작을 화면 밖에서 놓치지 않게.
+@export var focus_margin: float = 150.0
+var focus: Node2D = null
 
 @export_group("Shake")
 @export var max_shake_offset: float = 18.0
@@ -48,7 +52,14 @@ func _physics_process(delta: float) -> void:
 		var facing := 1.0 if target.get("facing") == null else float(target.facing)
 		var desired_look := facing * look_ahead
 		_look = lerp(_look, desired_look, 1.0 - exp(-look_ahead_lerp * delta))
-		var desired := _clamp_to_room(target.global_position + Vector2(_look, vertical_offset))
+		var want := target.global_position + Vector2(_look, vertical_offset)
+		if focus != null and is_instance_valid(focus):
+			var half := get_viewport_rect().size * 0.5 / zoom
+			var mid := (target.global_position + focus.global_position) * 0.5
+			var lim := Vector2(maxf(half.x - focus_margin, 0.0), maxf(half.y - focus_margin, 0.0))
+			want.x = clampf(mid.x, target.global_position.x - lim.x, target.global_position.x + lim.x)
+			want.y = clampf(lerpf(want.y, mid.y + vertical_offset, 0.4), target.global_position.y - lim.y, target.global_position.y + lim.y)
+		var desired := _clamp_to_room(want)
 		global_position = global_position.lerp(desired, 1.0 - exp(-follow_lerp * delta))
 
 	# 흔들림: trauma^2 로 변환해 부드럽게 들어오고 빠르게 빠진다.

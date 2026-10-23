@@ -66,7 +66,7 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, ULTIMATE,
 @export var parry_success_time: float = 0.24     # 성공 후 자세 유지(무적)
 @export var parry_whiff_time: float = 0.3        # 헛반격 경직 (무적 없음)
 @export var parry_whiff_cooldown: float = 0.5    # 헛반격 후 재입력 금지 — 반짝임(0.4초)보다 길어서 연타가 안 통한다
-@export var counter_damage: int = 999            # 카유공 반격 결정타 (즉사)
+@export var counter_damage: int = 999            # 카유공 반격 결정타 기본값 (즉사). 적이 counter_strike_damage()로 바꿀 수 있다
 @export var chain_window: float = 0.2            # 반격 성공 후 연쇄 반격 입력을 받는 시간
 @export var haki_every: int = 3                  # 연쇄 반격이 이만큼 이어질 때마다 패기 방출
 @export var haki_damage: int = 15                # 평타 1타(10)의 1.5배
@@ -801,18 +801,21 @@ func _start_counter(threats: Array[Enemy]) -> void:
 	_set_flash(Color(0.75, 0.45, 1.0), 1.0)
 	_spawn_parry_spark(global_position + Vector2(facing * 26.0, -16.0), 1.2)
 	for enemy in threats:
+		# 반격당한 뒤에는 적의 상태가 바뀌므로 결정타 데미지를 먼저 묻는다 (0 = X자 없이 경직만)
+		var dmg := enemy.counter_strike_damage(counter_damage)
 		enemy.on_countered(global_position)
-		_spawn_counter_slash(enemy)
+		if dmg > 0:
+			_spawn_counter_slash(enemy, dmg)
 	_check_haki()
 
 
-func _spawn_counter_slash(enemy: Enemy) -> void:
+func _spawn_counter_slash(enemy: Enemy, dmg: int) -> void:
 	if counter_slash_scene == null:
 		return
-	var cs := counter_slash_scene.instantiate() as CounterSlash
+	var cs := counter_slash_scene.instantiate() as XSlash
 	cs.target = enemy.hurtbox
 	cs.source = self
-	cs.damage = counter_damage
+	cs.damage = dmg
 	cs.from_pos = global_position + Vector2(0.0, -8.0)
 	_fx_parent().add_child(cs)
 	cs.global_position = enemy.global_position

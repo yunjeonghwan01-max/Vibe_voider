@@ -14,7 +14,8 @@ var rng := RandomNumberGenerator.new()
 
 func _init() -> void:
 	rng.seed = 7
-	for dir in ["characters/player", "characters/grunt", "characters/duelist", "characters/watcher", "environment", "effects"]:
+	for dir in ["characters/player", "characters/grunt", "characters/duelist", "characters/watcher", "characters/knight",
+			"environment", "effects"]:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT + dir))
 	_gen_player()
 	_gen_grunt()
@@ -23,6 +24,7 @@ func _init() -> void:
 	_gen_props()
 	_gen_effects()   # 맨 뒤에 둔다 — rng 소비 순서가 바뀌면 기존 그림이 달라진다
 	_gen_watcher()   # 새 생성기는 항상 이 아래에 추가한다 (같은 이유)
+	_gen_knight()
 	print("[sprite_gen] done")
 	quit()
 
@@ -1167,3 +1169,263 @@ func _feather(img: Image, root: Vector2, angle_deg: float, length: float, side: 
 	_poly(img, pts, body)
 	_line(img, root + n * width * 0.4, end, 0.9, edge)
 	_line(img, root + dir * (length - 3.0), end, 1.2, tip)
+
+
+# ═══════════════════════════════ 보스 — 월식의 기사 ═══════════════════════════════
+# 플레이어의 약 3배(몸 ~84 아트 픽셀 = 화면 ~168px)인 갑옷 기사. 투구 위 금빛 초승달, 와인빛 깃털 장식, 찢긴 망토.
+# 대검은 손에서 분리해(knight_sword.png) 따로 회전시킨다.
+# 프레임 순서와 손 위치("hand")는 actors/enemies/knight/knight.gd의 Frame / HAND와 같아야 한다.
+const KNIGHT_W := 76
+const KNIGHT_H := 96
+const KNIGHT_GROUND := 93
+const KNIGHT_CX := 36
+
+
+func _gen_knight() -> void:
+	var specs := [
+		{"hand": Vector2(49, 54)},                                                              # 0 idle a
+		{"hand": Vector2(49, 55), "breath": 1, "flutter": 1.0},                                 # 1 idle b
+		{"hand": Vector2(50, 53), "stride": 5.0, "bob": -1, "flutter": 1.5},                    # 2 walk
+		{"hand": Vector2(49, 54), "flutter": 0.5},                                              # 3 walk
+		{"hand": Vector2(50, 53), "stride": -5.0, "bob": -1, "flutter": 1.5},                   # 4 walk
+		{"hand": Vector2(49, 54), "flutter": 0.5},                                              # 5 walk
+		{"hand": Vector2(39, 27), "crouch": 3, "lean": -3.0, "stride": 5.0},                    # 6 windup (대검을 머리 위 뒤로)
+		{"hand": Vector2(58, 57), "crouch": 4, "lean": 6.0, "stride": 9.0, "flutter": 4.0},     # 7 strike
+		{"hand": Vector2(47, 61), "crouch": 2, "lean": -6.0, "stride": -3.0, "flutter": 2.0, "eye": "dim"},   # 8 stagger
+		{"hand": Vector2(45, 58), "crouch": 3, "lean": 8.0, "stride": 10.0, "flutter": 7.0},    # 9 dash
+		{"hand": Vector2(50, 57), "raise": true, "lean": -2.0, "flutter": 3.0, "eye": "hot"},   # 10 cast (한 손을 치켜듦)
+		{"hand": Vector2(53, 45), "crouch": 2, "stride": 6.0, "eye": "hot"},                    # 11 guard (반격 자세)
+		{"hand": Vector2(50, 47), "crouch": 5, "lean": 3.0, "stride": 4.0, "flutter": 5.0, "eye": "rage"},    # 12 slam
+		{"hand": Vector2(43, 64), "crouch": 8, "lean": 7.0, "stride": 8.0, "flutter": 2.0, "eye": "rage"},    # 13 crouch (돌진 준비)
+		{"hand": Vector2(45, 61), "crouch": 4, "lean": 11.0, "stride": 12.0, "flutter": 8.0, "eye": "rage"},  # 14 rush
+		{"hand": Vector2(44, 23), "lean": -4.0, "stride": 6.0, "flutter": 3.0, "eye": "rage"},  # 15 roar (등장 포효)
+	]
+	var frames: Array[Image] = []
+	for s in specs:
+		frames.append(_knight_frame(s))
+	_save(_sheet(frames), "characters/knight/knight.png")
+	_save(_knight_sword(), "characters/knight/knight_sword.png")
+
+
+func _knight_frame(p: Dictionary) -> Image:
+	var img := _new(KNIGHT_W, KNIGHT_H)
+	var steel := _c(72, 76, 108)
+	var steel_l := _c(128, 134, 176)
+	var steel_d := _c(42, 42, 68)
+	var steel_dd := _c(26, 24, 42)
+	var gold := _c(218, 172, 82)
+	var gold_d := _c(148, 102, 48)
+	var cape := _c(46, 24, 74)
+	var cape_d := _c(28, 14, 46)
+	var lining := _c(128, 30, 56)
+	var plume := _c(104, 32, 70)
+	var plume_d := _c(62, 18, 44)
+	var visor := _c(10, 6, 16)
+	var eye_mode: String = p.get("eye", "normal")
+	var eye_col := _c(196, 156, 255)
+	match eye_mode:
+		"hot":
+			eye_col = _c(255, 232, 150)
+		"rage":
+			eye_col = _c(255, 92, 80)
+		"dim":
+			eye_col = _c(92, 72, 132)
+	var crouch: float = p.get("crouch", 0) + p.get("breath", 0) * 0.5
+	var lean: float = p.get("lean", 0.0)
+	var stride: float = p.get("stride", 0.0)
+	var flutter: float = p.get("flutter", 0.0)
+	var bob: float = p.get("bob", 0)
+	var hand: Vector2 = p.get("hand", Vector2(49, 54))
+	var raise: bool = p.get("raise", false)
+	var g := float(KNIGHT_GROUND)
+	var cx := float(KNIGHT_CX)
+	var hip_y := g - 28.0 + crouch + bob
+	# 서 있을 때 기준 좌표 → 웅크림/기울임 적용 (엉덩이 위로 갈수록 lean만큼 앞으로)
+	var sh := func(v: Vector2) -> Vector2:
+		var y := v.y + crouch + bob
+		var t := clampf((hip_y - y) / 40.0, 0.0, 1.0)
+		return Vector2(v.x + lean * t, y)
+	var hc: Vector2 = sh.call(Vector2(cx + 2, g - 71))
+
+	# ── 깃털 장식 (가장 뒤, 투구 뒤로 흩날린다)
+	_poly(img, PackedVector2Array([hc + Vector2(-2, -9), hc + Vector2(-12 - flutter, -8), hc + Vector2(-20 - flutter * 1.5, -3),
+			hc + Vector2(-23 - flutter * 1.7, 3), hc + Vector2(-15 - flutter, 1), hc + Vector2(-5, -2)]), plume)
+	_line(img, hc + Vector2(-4, -6), hc + Vector2(-19 - flutter * 1.5, 0), 1.0, plume_d)
+
+	# ── 망토 (몸 뒤) — 밑단은 찢겨 있고 안감이 비친다
+	var c_top0: Vector2 = sh.call(Vector2(cx - 12, g - 60))
+	var c_top1: Vector2 = sh.call(Vector2(cx + 3, g - 60))
+	var hem_y := g - 9.0 + crouch * 0.4
+	var cape_pts := PackedVector2Array([c_top0, c_top1, Vector2(cx - 2 + lean * 0.3, hem_y - 6),
+			Vector2(cx - 5, hem_y - 2), Vector2(cx - 9, hem_y - 6), Vector2(cx - 13 - flutter * 0.5, hem_y),
+			Vector2(cx - 17 - flutter * 0.8, hem_y - 5), Vector2(cx - 22 - flutter * 1.3, hem_y + 1 - flutter * 0.4),
+			Vector2(cx - 24 - flutter * 1.5, hem_y - 12 - flutter * 0.3), Vector2(cx - 21 - flutter * 0.8, g - 40),
+			c_top0 + Vector2(-5, 6)])
+	_poly(img, cape_pts, cape)
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if not c.is_equal_approx(cape):
+				continue
+			if _px(img, x, y + 1).a <= 0.0 or _px(img, x, y + 2).a <= 0.0:
+				img.set_pixel(x, y, lining)
+			elif x < cx - 10 - lean * 0.3:
+				img.set_pixel(x, y, cape_d)
+
+	# ── 뒤팔 (치켜들지 않을 때는 몸통 뒤에 거의 가려진다)
+	var back_sh: Vector2 = sh.call(Vector2(cx - 9, g - 57))
+	if not raise:
+		var bh: Vector2 = sh.call(Vector2(cx - 12, g - 40))
+		_line(img, back_sh, bh, 5.0, steel_dd)
+		_ellipse(img, bh.x, bh.y, 2.8, 2.8, steel_d)
+
+	# ── 다리 (판금 정강이 + 금빛 무릎)
+	var back_foot := Vector2(cx - 5 - stride, g - 2)
+	var front_foot := Vector2(cx + 6 + stride, g - 2)
+	var b_hip := Vector2(cx - 5, hip_y)
+	var f_hip := Vector2(cx + 5, hip_y)
+	var b_knee := (b_hip + back_foot) * 0.5 + Vector2(crouch * 0.5 + 1, 0)
+	var f_knee := (f_hip + front_foot) * 0.5 + Vector2(2 + crouch * 0.8, -crouch * 0.2)
+	_line(img, b_hip, b_knee, 7.0, steel_d)
+	_line(img, b_knee, back_foot, 6.0, steel_d)
+	_poly(img, PackedVector2Array([back_foot + Vector2(-4, -3), back_foot + Vector2(5, -2), back_foot + Vector2(7, 2),
+			back_foot + Vector2(-4, 2)]), steel_dd)
+	_line(img, f_hip, f_knee, 7.5, steel)
+	_line(img, f_knee, front_foot, 6.5, steel)
+	_poly(img, PackedVector2Array([front_foot + Vector2(-4, -3), front_foot + Vector2(6, -2), front_foot + Vector2(9, 2),
+			front_foot + Vector2(-4, 2)]), steel_d)
+	_ellipse(img, b_knee.x + 1, b_knee.y, 2.4, 2.2, gold_d)
+	_ellipse(img, f_knee.x + 1, f_knee.y, 2.8, 2.5, gold)
+
+	# ── 뒤 견갑 (어둡게)
+	_ellipse(img, back_sh.x - 1, back_sh.y, 8.0, 6.5, steel_d)
+
+	# ── 갑옷 치마(태싯) — 겹친 판
+	var tasset := PackedVector2Array()
+	for v in [Vector2(cx - 13, g - 37), Vector2(cx + 12, g - 37), Vector2(cx + 14, g - 24), Vector2(cx + 7, g - 21),
+			Vector2(cx + 1, g - 24), Vector2(cx - 6, g - 21), Vector2(cx - 13, g - 24), Vector2(cx - 15, g - 30)]:
+		tasset.append(sh.call(v))
+	_poly(img, tasset, steel_d)
+	for ly in [g - 35.0, g - 30.0, g - 25.0]:
+		_line(img, sh.call(Vector2(cx - 13, ly)), sh.call(Vector2(cx + 13, ly)), 1.0, steel)
+	_line(img, sh.call(Vector2(cx + 1, g - 36)), sh.call(Vector2(cx + 1, g - 23)), 1.0, steel_dd)
+
+	# ── 흉갑
+	var torso := PackedVector2Array()
+	for v in [Vector2(cx - 12, g - 61), Vector2(cx + 9, g - 63), Vector2(cx + 14, g - 52), Vector2(cx + 12, g - 38),
+			Vector2(cx - 11, g - 37), Vector2(cx - 14, g - 50)]:
+		torso.append(sh.call(v))
+	_poly(img, torso, steel)
+	_line(img, sh.call(Vector2(cx + 5, g - 60)), sh.call(Vector2(cx + 3, g - 41)), 1.0, steel_l)   # 가운데 능선
+	_line(img, sh.call(Vector2(cx - 13, g - 47)), sh.call(Vector2(cx + 13, g - 47)), 0.8, steel_d)  # 판 이음새
+	# 가슴의 금빛 초승달 문장
+	var em: Vector2 = sh.call(Vector2(cx + 1, g - 54))
+	for y in range(int(em.y) - 4, int(em.y) + 5):
+		for x in range(int(em.x) - 4, int(em.x) + 5):
+			var d1 := Vector2(x + 0.5, y + 0.5).distance_to(em)
+			var d2 := Vector2(x + 0.5, y + 0.5).distance_to(em + Vector2(1.6, -1.2))
+			if d1 <= 3.6 and d2 > 3.0:
+				_put(img, x, y, gold)
+	# 허리띠 + 버클
+	_line(img, sh.call(Vector2(cx - 11, g - 38)), sh.call(Vector2(cx + 12, g - 38)), 2.0, gold_d)
+	var bk: Vector2 = sh.call(Vector2(cx + 4, g - 39))
+	_rect(img, int(bk.x) - 1, int(bk.y), 3, 3, gold)
+	# 목가리개
+	var gor: Vector2 = sh.call(Vector2(cx + 1, g - 63))
+	_ellipse(img, gor.x, gor.y, 7.0, 3.0, steel_d)
+
+	# ── 치켜든 뒤팔 (카유공): 몸통 위, 투구 뒤
+	if raise:
+		var rh := Vector2(cx - 6, 7)
+		var rel := (back_sh + rh) * 0.5 + Vector2(-5, 1)
+		_line(img, back_sh, rel, 5.5, steel_d)
+		_line(img, rel, rh, 7.0, _c(14, 10, 24))
+		_line(img, rel, rh, 5.0, steel)
+		_ellipse(img, rel.x, rel.y, 2.4, 2.4, gold_d)
+		_ellipse(img, rh.x, rh.y, 3.2, 3.0, steel_l)
+		for k in 3:
+			_line(img, rh + Vector2(-2 + k * 2, -1), rh + Vector2(-2.5 + k * 2.5, -5), 1.0, steel_l)
+		_put(img, int(rh.x), int(rh.y), _c(255, 236, 170))
+
+	# ── 투구 (통투구 + 세로 능선 + 시야 틈 + 빛나는 눈) 와 금빛 초승달 장식
+	_ellipse(img, hc.x, hc.y, 7.5, 9.0, steel)
+	_rect(img, int(hc.x) + 1, int(hc.y) - 6, 7, 13, steel)
+	_line(img, hc + Vector2(3, -8), hc + Vector2(3, -2), 1.0, steel_l)
+	_rect(img, int(hc.x) - 2, int(hc.y) - 1, 10, 2, visor)
+	for k in 3:
+		_put(img, int(hc.x) + 3 + k * 2, int(hc.y) + 3, visor)
+		_put(img, int(hc.x) + 3 + k * 2, int(hc.y) + 5, visor)
+	_rect(img, int(hc.x) + 4, int(hc.y) - 1, 3, 1, eye_col)
+	if eye_mode != "dim":
+		_put(img, int(hc.x) + 6, int(hc.y) - 1, Color(1, 1, 1))
+		_put(img, int(hc.x) + 5, int(hc.y), eye_col.darkened(0.3))
+	_line(img, hc + Vector2(-6, 8), hc + Vector2(8, 7), 1.0, gold_d)
+	var cc := hc + Vector2(-1, -15)
+	for y in range(int(cc.y) - 9, int(cc.y) + 9):
+		for x in range(int(cc.x) - 9, int(cc.x) + 10):
+			var q := Vector2(x + 0.5, y + 0.5)
+			if q.distance_to(cc) <= 8.0 and q.distance_to(cc + Vector2(0, -4)) > 8.0:
+				_put(img, x, y, gold if q.y < cc.y + 6.0 else gold_d)
+
+	# ── 앞 견갑 (겹판 + 금테 + 리벳)
+	var ps: Vector2 = sh.call(Vector2(cx + 8, g - 57))
+	_ellipse(img, ps.x + 1, ps.y + 6, 8.0, 3.5, steel_d)
+	_ellipse(img, ps.x, ps.y, 9.5, 6.5, steel)
+	_line(img, ps + Vector2(-8, 4), ps + Vector2(9, 3), 1.0, gold)
+	_put(img, int(ps.x) + 2, int(ps.y) - 3, gold)
+	_put(img, int(ps.x) - 4, int(ps.y) - 2, gold_d)
+
+	# ── 앞팔 (어깨 → 팔꿈치 → 대검 쥔 손)
+	var f_sh := ps + Vector2(1, 3)
+	var to := hand - f_sh
+	var dist := to.length()
+	var seg := 11.5
+	var mid := (f_sh + hand) * 0.5
+	var elbow := mid
+	if dist < seg * 2.0:
+		var n := to.normalized().orthogonal()
+		if n.x > 0.0 or (absf(n.x) < 0.2 and n.y < 0.0):
+			n = -n
+		elbow = mid + n * sqrt(maxf(seg * seg - dist * dist * 0.25, 0.0))
+	var rim := _c(14, 10, 24)                                  # 팔이 흉갑에 묻히지 않게 어두운 테두리
+	_line(img, f_sh, elbow, 8.0, rim)
+	_line(img, elbow, hand, 7.0, rim)
+	_ellipse(img, hand.x, hand.y, 4.6, 4.4, rim)
+	_line(img, f_sh, elbow, 6.0, steel_l.darkened(0.15))
+	_line(img, elbow, hand, 5.0, steel_l.darkened(0.15))
+	_ellipse(img, elbow.x, elbow.y, 2.6, 2.6, gold_d)
+	_ellipse(img, hand.x, hand.y, 3.4, 3.2, steel_l)
+	_put(img, int(hand.x), int(hand.y), steel_d)
+
+	_shade_edges(img, 0.2, 0.25, [visor, eye_col, Color(1, 1, 1), eye_col.darkened(0.3), _c(255, 236, 170), rim])
+	_outline(img, _c(8, 4, 14))
+	return img
+
+
+## 대검 — 손잡이 중심(8, 6)이 회전축. 칼날 가운데 홈에 보랏빛 룬이 박혀 있다.
+func _knight_sword() -> Image:
+	var img := _new(74, 13)
+	var gold := _c(218, 172, 82)
+	var gold_d := _c(148, 102, 48)
+	var cy := 6
+	_ellipse(img, 3.0, 6.5, 2.2, 2.2, gold)                  # 폼멜
+	_rect(img, 4, 5, 8, 3, _c(56, 26, 42))                   # 손잡이
+	for x in [5, 7, 9, 11]:
+		_put(img, x, 5, _c(96, 48, 66))
+	_rect(img, 12, 1, 3, 11, gold)                           # 가드
+	_rect(img, 14, 1, 1, 11, gold_d)
+	for x in range(15, 72):
+		var u := float(x - 15) / 56.0
+		var hw := 3 if u < 0.78 else int(round(lerpf(3.0, 0.0, (u - 0.78) / 0.22)))
+		for y in range(cy - hw, cy + hw + 1):
+			var c := _c(178, 182, 206)
+			if y == cy - hw:
+				c = _c(236, 240, 255)
+			elif y == cy + hw:
+				c = _c(104, 108, 136)
+			elif y == cy and x < 58:
+				c = _c(92, 94, 128) if (x - 18) % 7 != 0 else _c(184, 132, 255)
+			_put(img, x, y, c)
+	_put(img, 71, cy, Color(1, 1, 1))
+	_outline(img, _c(8, 4, 14))
+	return img

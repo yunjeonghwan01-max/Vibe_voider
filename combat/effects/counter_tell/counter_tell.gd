@@ -1,7 +1,7 @@
-class_name WatcherTell
+class_name CounterTell
 extends Node2D
 
-## 카유공 예고 연출 (반전되지 않도록 Watcher 루트 직속에 둔다). Watcher가 매 프레임 mode/progress/aim_point를 채운다.
+## 카유공 예고 연출 — 공용 (감시자, 월식의 기사). 반전되지 않도록 Actor 루트 직속에 두고, 쓰는 Actor가 매 프레임 mode/progress/aim_point를 채운다.
 ## CHARGE: 금빛 불빛 입자들이 몸 중앙으로 빨려든다. progress(0→1)가 오를수록 빨라지고 많아지며, 중심 빛이 커진다.
 ## WINDOW: 몸에 거대한 + 모양 섬광이 맥동하고, 플레이어를 향한 가는 조준선이 깜빡인다 (= 지금 반격!).
 

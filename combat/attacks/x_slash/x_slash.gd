@@ -1,7 +1,9 @@
-class_name CounterSlash
+class_name XSlash
 extends Node2D
 
-## 카유공 반격 성공의 결정타 — 대상 몸에 검보라색 거대한 X자 참격을 새긴다.
+## X자 참격 — 대상 몸에 거대한 X자 두 획을 새기고 결정타를 넣는다. 공용 공격 (사용처 둘):
+##   - 플레이어의 카유공 반격 성공 (검보라, 감시자는 즉사 / 보스는 큰 피해)
+##   - 월식의 기사 카유공을 못 받아쳤을 때 플레이어 몸에 새겨지는 X자 (색은 스폰하는 쪽이 바꾸고, 무적을 뚫는다)
 ## 세상은 GameFeel로 거의 멈춰 있고, 이 연출만 실제 시간으로 흐른다 (그래서 소리와 획이 정확히 맞는다).
 ##   0.00  플레이어 → 대상으로 공허의 일섬(가는 선)이 번쩍
 ##   0.00  첫 획 ＼   0.07  둘째 획 ／   (counter_slash.wav의 두 번 가르는 소리와 맞춤)
@@ -18,6 +20,7 @@ const LIFETIME := 1.0
 @export var body_color: Color = Color(0.2, 0.03, 0.32, 1.0)      # 검보라
 @export var edge_color: Color = Color(0.82, 0.55, 1.0, 1.0)
 @export var core_color: Color = Color(1.0, 0.95, 1.0, 1.0)
+@export var screen_flash: Color = Color(0.4, 0.08, 0.6)
 @export var spark_scene: PackedScene
 
 @onready var sfx: AudioStreamPlayer2D = $Audio/Slash
@@ -26,7 +29,10 @@ const LIFETIME := 1.0
 var target: HurtboxComponent = null
 var source: Node = null
 var damage: int = 999
-var from_pos: Vector2 = Vector2.ZERO     # 반격한 플레이어 위치 (전역)
+var from_pos: Vector2 = Vector2.ZERO     # 공격한 쪽 위치 (전역) — 여기서 대상까지 일섬이 번쩍인다
+var pierce_invincibility: bool = false   # true면 결정타 직전 대상의 무적(대시 등)을 끄고 확정으로 맞힌다
+var knockback_x: float = 260.0
+var hit_stop_time: float = 0.13
 
 var _t: float = 0.0
 var _last_us: int = 0
@@ -59,10 +65,12 @@ func _strike() -> void:
 	if dir == 0.0:
 		dir = 1.0
 	if is_instance_valid(target):
-		target.receive_hit(damage, source, Vector2(dir * 260.0, -220.0))
-	GameFeel.hit_stop(0.13)
+		if pierce_invincibility:
+			target.invincible = false
+		target.receive_hit(damage, source if is_instance_valid(source) else null, Vector2(dir * knockback_x, -220.0))
+	GameFeel.hit_stop(hit_stop_time)
 	GameFeel.shake(1.0)
-	GameFeel.flash(Color(0.4, 0.08, 0.6), 0.3, 0.35)
+	GameFeel.flash(screen_flash, 0.3, 0.35)
 	if spark_scene == null:
 		return
 	for spec in [[Color(0.6, 0.25, 0.95, 1.0), 30, 160.0, 0.42], [Color(0.25, 0.05, 0.4, 1.0), 18, 120.0, 0.5],

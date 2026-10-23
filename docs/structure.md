@@ -34,7 +34,7 @@ Godot 엔진의 실제 제약이 이 문서와 충돌하면 **엔진 제약이 �
 |---|---|---|
 | `app/` | 게임 최상위 Shell. Level 콘텐츠를 직접 두지 않는다 | `main.tscn`, `main.gd` |
 | `actors/` | 자기 상태를 가지고 행동하는 존재 | `player/`, `enemies/<enemy>/`, `npcs/` |
-| `combat/` | 어느 한 Actor에 종속되지 않는 **공용 전투 언어** | `components/` (`health/`, `hitbox/`, `hurtbox/`), `attacks/`, `projectiles/`, `effects/` |
+| `combat/` | 어느 한 Actor에 종속되지 않는 **공용 전투 언어** | `components/` (`health/`, `hitbox/`, `hurtbox/`), `attacks/` (`x_slash/`), `projectiles/`, `effects/` (`slash/` `spark/` `glint/` `afterimage/` `hit_flash/` `counter_tell/` `ground_impact/`) |
 | `world/` | 살아 있지 않은 World Object / World 리소스 | `tiles/`, `platforms/`, `hazards/`, `interactables/`, `props/`, `backgrounds/` |
 | `levels/` | 부품을 조립한 실제 게임 공간 | `<level>/<level>.tscn` |
 | `ui/` | 플레이어용 화면 UI (개발용 UI는 `toolkit/`) | `hud/`, `menus/`, `dialogue/`, `transitions/` |
@@ -219,10 +219,10 @@ Main (Node)                                   app/main.tscn   (run/main_scene)
 │   ├── Actors (Node2D) └ Player              actors/player/player.tscn
 │   ├── Projectiles (Node2D, group "projectiles") 런타임 투사체 (장풍 구체)
 │   ├── Effects (Node2D, group "fx")          슬래시/스파크/잔상이 여기 붙는다
-│   ├── GameCamera (Camera2D)                 camera/game_camera.gd  (follow + lookahead + shake + room_limits)
+│   ├── GameCamera (Camera2D)                 camera/game_camera.gd  (follow + lookahead + shake + room_limits + focus: 보스전엔 보스도 함께 화면에 담는다)
 │   ├── Vignette (CanvasLayer 1)              화면 가장자리 어둡게
-│   ├── Hud (CanvasLayer 2)                   ui/hud/hud.tscn  (초상화 + 체력/잔상 바 + 궁극기 바)
-│   └── Audio └ Music (AudioStreamPlayer)     루프 배경 음악
+│   ├── Hud (CanvasLayer 2)                   ui/hud/hud.tscn  (초상화 + 체력/잔상 바 + 궁극기 바 + 감시자 처치 수 + 보스 체력 바)
+│   └── Audio  Music(평소 루프) / BossMusic(보스전 루프) / Banish / Rumble
 └── Toolkit (CanvasLayer)                     toolkit/toolkit.tscn  (디버그 HUD는 기본 숨김, F1)
 
 Player (CharacterBody2D)                       actors/player/player.gd
@@ -240,7 +240,7 @@ Player (CharacterBody2D)                       actors/player/player.gd
 │       └── Hitbox(+CollisionShape2D)
 └── Audio (AudioStreamPlayer2D들)
 
-Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, watcher/
+Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, watcher/, knight/(보스)
 ├── Visual (Node2D, hit_flash 머티리얼 local_to_scene)
 │   ├── Body (Sprite2D, 9프레임 시트)
 │   └── Blade (Sprite2D)                        듀얼리스트만
@@ -261,11 +261,19 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
 - `Toolkit` (`toolkit.gd`): `tool_toggle_hud` / `tool_restart` / `tool_pause`.
 - **카유공(카운터 유도 공격)** — 감시자(`actors/enemies/watcher/`, 공중 원거리 중간 보스급 적 — 금장 갑각·가시 왕관·후광·칼날깃 날개, 잡몹보다 크다):
   - 평소: 플레이어 위쪽 옆(`hover_distance`/`hover_height`)을 떠다니며 바늘(`watcher_needle.gd/.tscn`, 반격 불가)을 쏜다. 날아다니므로 `_apply_gravity`를 감속으로 오버라이드하고 몸은 지형과 충돌하지 않는다(mask 0, `fly_bounds` 안에 머문다 — 레벨이 스폰 때 지정).
-  - CHARGE 2초(금빛 입자가 점점 빠르게 몸 중앙으로, `watcher_tell.gd`) → WINDOW 0.4초(거대한 + 섬광 + 조준선) → 못 받아치면 히트스캔 광선(`watcher_beam.gd` 겉모습). CHARGE/WINDOW는 슈퍼아머.
+  - CHARGE 2초(금빛 입자가 점점 빠르게 몸 중앙으로, 공용 `combat/effects/counter_tell/` (`CounterTell`)) → WINDOW 0.4초(거대한 + 섬광 + 조준선) → 못 받아치면 히트스캔 광선(`watcher_beam.gd` 겉모습). CHARGE/WINDOW는 슈퍼아머.
   - 광선은 **확정 피격**: 맞히기 직전 대상 Hurtbox의 `invincible`을 끄고 `receive_hit()` (대시 무적/다른 적 반격 중 무적도 뚫는다). 지형에만 막히며, 그래서 CHARGE/WINDOW 동안 시야(world 레이, one-way 발판 포함)가 막히면 시야가 트이는 자리로 스스로 옮긴다.
   - 반격: `Enemy.is_counter_open()` / `Enemy.on_countered(from_pos)` (기본은 없음 — 감시자가 오버라이드)와 그룹 `counter_threat`. 플레이어가 반격 키를 누르면 ParryBox의 반짝이는 근접 공격을 먼저 처리하고, 그게 없을 때만 열린 카유공을 **방향·거리 무관**하게 받아친다 (= 다른 적 반격에 쓴 입력으로는 광선을 막지 못한다).
-  - 반격 성공 → `actors/player/abilities/counter_slash/` (`CounterSlash`): 세상을 거의 멈춘 채(GameFeel) 실제 시간으로 검보라 X자 두 획을 새기고, 결정타 순간 `receive_hit(counter_damage=999)`로 즉사.
+  - 반격 성공 → 공용 `combat/attacks/x_slash/` (`XSlash`): 세상을 거의 멈춘 채(GameFeel) 실제 시간으로 검보라 X자 두 획을 새기고 결정타 순간 `receive_hit()`. 데미지는 Player가 `enemy.counter_strike_damage(counter_damage=999)`로 묻는다 (감시자 = 즉사, 보스는 오버라이드, 0이면 X자 없이 경직만). XSlash는 보스도 쓴다(카유공 실패 시 플레이어 몸에 붉은 X자, `pierce_invincibility`).
 - 적 전용 기술(돌진/참격)은 현재 각 적 스크립트 안에 있다. 두 번째 사용처가 생기면 `combat/attacks/`로 올린다.
+- **추방**: `Enemy.banish()` — 쓰러뜨린 게 아니라 싸움 밖으로 내쫓는다(`defeated`를 보내지 않으므로 다시 나타나지 않는다). 공허로 빨려 들어가듯 위로 늘어나며 사라진다. 하위 클래스 정리 훅 `_on_banished()`.
+- **보스 — 월식의 기사**(`actors/enemies/knight/`, `Knight`, 체력 1800, 플레이어의 약 3배 크기 갑옷 기사):
+  - 등장(임시 흐름, `arena.gd`): 감시자를 `watchers_for_boss`(3)번 쓰러뜨리면 → 남은 적 추방 + 음악 끊김 → 지진(천장 부스러기, `rumble.wav`) → 떨어질 자리에 그림자가 짙어지며 하늘에서 "쿵"(바닥 균열·발판 금, `landed` 시그널) → 포효 → 보스 음악·보스 체력 바·카메라 `focus`. 보스를 쓰러뜨리면 4초 뒤 평소 음악과 적들이 돌아오고 처치 수가 0부터 다시 센다.
+  - 패턴: ① 돌격 베기 — 어디든(공중 포함) 플레이어 바로 앞까지 미끄러져 와서 반짝임(0.4초) 후 베기, 가끔 2연격(ParryBox 반격) ② 카유공 검기 — 공중으로 떠올라 한 손을 들고 `CounterTell` 충전 2초 → + 섬광 0.4초(방향 무관 반격 → X자 180 피해 + 추락·경직 2.4초) → 실패 시 플레이어 몸에 붉은 `XSlash`(34, 무적 관통) ③ 반격 자세(쿨 12초) — 0.4초 은빛 초승달 방패, `Sensors/CounterGuard`(mask=player_hitbox)에 **켜져 있는** 플레이어 Hitbox가 닿으면 막고 플레이어 머리 위로 순간이동 → 붉은 경고 기둥 0.38초 → 내려찍기(`SlamHitbox` + 착지 `ShockHitbox`, layer 0 = 반격 불가) ④ 돌진(쿨 12초) — 바닥 끝으로 미끄러져 물러남 → 웅크려 붉은 경로선 0.8초 → 가속 돌진(`RushHitbox`), 플레이어 바로 앞(같은 높이)에 다가오는 순간만 0.15초 반짝임(ParryBox·방향 무관 반격 둘 다 인정) → 반격 시 스턴 3.6초, 아니면 반대쪽 벽에 부딪혀 벽이 깨진다.
+  - 선택: 돌진이 준비되면 돌진, 반격 자세가 준비되고 플레이어가 가까우면 반격 자세, 그 외엔 근접:원거리 = 2:1 (섞인 주머니).
+  - 보스는 항상 슈퍼아머(`_has_armor`)라 평타로는 경직되지 않는다 — 반짝임 반격·카유공 반격·돌진 반격으로만 무너진다. 날거나 순간이동할 때는 중력과 world 충돌을 끈다(`_set_float`). 방 바닥/좌우 끝/천장은 레벨이 스폰 때 넣는다.
+  - 아트: `assets/temporary/characters/knight/` (`knight.png` 16프레임 + 따로 회전하는 `knight_sword.png`), 프레임별 손 위치는 생성기 `_gen_knight`와 `Knight.HAND_ART`가 같아야 한다.
+- **지형 파괴 연출**: 공용 `combat/effects/ground_impact/` (`GroundImpact`, `_draw`): `crack_ground`(방사형 균열 — 처음엔 보랏빛으로 타오름 + 튀는 돌조각 + 흙먼지), `crack_wall`, `crack_ledge`, `rain_rubble`. 충돌 판정은 바꾸지 않는 겉모습이다.
 - **궁극기 — 월아 참격**(`actors/player/abilities/moon_slash/`, `MoonSlash`): Player가 발사(`ult_windup` 0.14초 뒤, 시전 중 무적·공중 체공)만 하고 나머지는 투사체가 처리한다. 속도 = `start_speed × e^(growth × t)` (처음엔 느리다가 지수적으로 빨라짐, 최대 2600). 본체(`Body` Hitbox, 반달 앞쪽 캡슐 r44·h250)가 적에게 닿으면 그 순간 겹친 적 전부 1타 20(평타 2배) + 띄우기 후 처음 닿은 적의 자리에서 깨진다(벽이면 반달 몸통 자리, 사거리 끝은 그냥 소멸). 깨진 자리에 양옆으로 벌어지는 열린 회오리 `vortex_time`(0.32초) → 위로 긴 사각형 `Burst` Hitbox(340x540, 깨진 높이 아래 70 ~ 위 470)로 폭발, 2타 40(평타 4배) + 크게 띄우기. 두 Hitbox 모두 적마다 1회. 모양은 일부러 불완전하다: 반달 안쪽 날 톱니·바깥 날 이 빠짐·끊긴 흰 심, 기둥은 찢긴 가장자리·가시 왕관·옆 가시·균열선 (주기적으로 다시 흔든다).
 - **에어본**: `Enemy`가 위쪽 넉백이 `LAUNCH_THRESHOLD`(-400)보다 강한 피격을 받으면 착지할 때까지 HITSTUN을 유지하고 몸이 뒤로 기운다 (나는 적은 `MAX_AIRBORNE` 1.4초 뒤 풀림, 슈퍼아머 중엔 띄워지지 않음). 컴포넌트 계약은 그대로 — 띄우기는 넉백 벡터의 크기로만 전달한다.
 - 플레이어 전투 기술(콤보/패링/대시)은 지금은 `player.gd`에 모아 feel을 빠르게 튜닝한다. "장착형 어빌리티" 시스템(두 번째 사용자)이 실제로 생기면 `actors/player/abilities/<name>/`로 분리한다.

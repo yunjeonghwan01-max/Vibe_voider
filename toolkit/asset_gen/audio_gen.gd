@@ -57,6 +57,20 @@ func _init() -> void:
 	_save("haki_burst", _haki_burst(), SR)
 	_save("moon_slash_fly", _moon_slash_fly(), SR)
 	_save("moon_slash_burst", _moon_slash_burst(), SR)
+	# 보스 — 월식의 기사 (rng 소비 순서 유지를 위해 항상 맨 뒤)
+	_save("boss_land", _boss_impact(2.0, 1.0), SR)
+	_save("boss_slam", _boss_impact(1.1, 0.7), SR)
+	_save("boss_step", _boss_step(), SR)
+	_save("boss_swing", _swing(0.36, 620.0, 1.0), SR)
+	_save("boss_roar", _boss_roar(), SR)
+	_save("banish", _banish(), SR)
+	_save("rumble", _rumble(), SR)
+	_save("boss_blink", _boss_blink(), SR)
+	_save("guard_ring", _guard_ring(), SR)
+	_save("guard_clang", _guard_clang(), SR)
+	_save("rush_charge", _rush_charge(), SR)
+	_save("boss_death", _boss_death(), SR)
+	_save("boss_music_loop", _boss_music(), MUSIC_SR, true)
 	print("[audio_gen] done")
 	quit()
 
@@ -841,3 +855,247 @@ func _moon_slash_burst() -> PackedFloat32Array:
 			s += boom + crack + rise + debris
 		b[i] = s
 	return _normalize(b, 0.95)
+
+
+# ═══════════════════════════════ 보스 — 월식의 기사 ═══════════════════════════════
+## 거대한 낙하/내려찍기: 땅이 꺼지는 저음 붐 + 깨지는 "콰직" + 오래 굴러떨어지는 돌 부스러기.
+## scale은 1이 등장 착지(가장 큼), 작을수록 짧고 가볍다.
+func _boss_impact(dur: float, scale: float) -> PackedFloat32Array:
+	var b := _buf(dur)
+	var st := SVF.new()
+	var st2 := SVF.new()
+	var st3 := SVF.new()
+	var ph := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		ph += TAU * (28.0 + 90.0 * exp(-t * 9.0)) / SR
+		var boom := sin(ph) * exp(-t * (2.2 / scale)) * 1.6
+		var crack := st.run(_n(), 1800.0, 0.5).band * exp(-t * 26.0) * 1.6
+		var body := st2.run(_n(), 160.0, 0.9).low * exp(-t * (3.0 / scale)) * 2.2
+		var debris := 0.0
+		if rng.randf() < 0.012 * exp(-t * 1.6 / scale):
+			debris = _n() * rng.randf_range(0.3, 0.9)
+		var grit := st3.run(_n(), 3200.0, 0.4).band * exp(-t * 3.0 / scale) * 0.25
+		b[i] = tanh((boom + crack + body + debris + grit) * 1.4)
+	return _normalize(b, 0.97)
+
+
+## 갑옷 발걸음: 둔탁한 쿵 + 쇳소리 짤랑.
+func _boss_step() -> PackedFloat32Array:
+	var b := _buf(0.3)
+	var ph := 0.0
+	var st := SVF.new()
+	for i in b.size():
+		var t := float(i) / SR
+		ph += TAU * (50.0 + 70.0 * exp(-t * 30.0)) / SR
+		var thud := sin(ph) * exp(-t * 18.0)
+		var clink := (sin(TAU * 2300.0 * t) * 0.5 + sin(TAU * 3470.0 * t) * 0.35) * exp(-t * 40.0) * 0.4
+		var dirt := st.run(_n(), 900.0, 0.6).band * exp(-t * 35.0) * 0.6
+		b[i] = thud + clink + dirt
+	return _normalize(b, 0.85)
+
+
+## 등장 포효: 투구 안에서 울리는 낮은 쇳빛 울부짖음 — 톱니파에 모음 공명 + 쇠 울림, 점점 커졌다 끊긴다.
+func _boss_roar() -> PackedFloat32Array:
+	var dur := 1.7
+	var b := _buf(dur)
+	var st := SVF.new()
+	var st2 := SVF.new()
+	var st3 := SVF.new()
+	var ph := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var u := t / dur
+		var f := 62.0 + 18.0 * sin(PI * u) + rng.randf_range(-3.0, 3.0) + 4.0 * sin(TAU * 7.0 * t)
+		ph += f / SR
+		var saw := fposmod(ph, 1.0) * 2.0 - 1.0
+		var src := saw + _n() * 0.45
+		var vowel := st.run(src, 520.0 + 260.0 * sin(PI * u), 0.25).band + st2.run(src, 1250.0, 0.35).band * 0.6
+		var ring := (sin(TAU * 410.0 * t) + sin(TAU * 637.0 * t) * 0.6) * 0.12
+		var hiss := st3.run(_n(), 2600.0, 0.5).band * 0.25
+		var env := clampf(t / 0.25, 0.0, 1.0) * clampf((dur - t) / 0.35, 0.0, 1.0)
+		b[i] = tanh((vowel * 1.6 + ring + hiss) * env * 2.2)
+	return _normalize(b, 0.9)
+
+
+## 추방: 공허로 빨려드는 "쓔우욱 — 퐁" (역방향으로 차오르다 끊긴다).
+func _banish() -> PackedFloat32Array:
+	var dur := 0.75
+	var b := _buf(dur)
+	var st := SVF.new()
+	var ph := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var u := clampf(t / 0.55, 0.0, 1.0)
+		var env := pow(u, 1.8) * (1.0 if t < 0.55 else exp(-(t - 0.55) * 40.0))
+		var suck := st.run(_n(), 300.0 + 3800.0 * u * u, 0.4).band
+		ph += TAU * (90.0 + 600.0 * u * u) / SR
+		var s := (suck + sin(ph) * 0.5) * env
+		if t >= 0.55:
+			s += sin(TAU * 140.0 * t) * exp(-(t - 0.55) * 25.0) * 0.7
+		b[i] = s
+	return _normalize(b, 0.8)
+
+
+## 지진 울림: 낮게 흔들리는 땅울림 + 돌가루 — 보스 등장 직전.
+func _rumble() -> PackedFloat32Array:
+	var dur := 2.4
+	var b := _buf(dur)
+	var st := SVF.new()
+	var st2 := SVF.new()
+	for i in b.size():
+		var t := float(i) / SR
+		var u := t / dur
+		var env := clampf(t / 1.2, 0.0, 1.0) * clampf((dur - t) / 0.15, 0.0, 1.0)
+		var low := st.run(_n(), 70.0 + 30.0 * sin(TAU * 1.3 * t), 0.7).low * 3.0
+		var wob := 0.7 + 0.3 * sin(TAU * (5.0 + 8.0 * u) * t)
+		var grit := 0.0
+		if rng.randf() < 0.004 + 0.01 * u:
+			grit = _n() * 0.4
+		grit += st2.run(_n(), 2500.0, 0.5).band * 0.08 * u
+		b[i] = tanh((low * wob + grit) * env * 1.5)
+	return _normalize(b, 0.85)
+
+
+## 순간이동: 공기가 찢기며 사라지는 "쯧—" + 아래로 꺼지는 공허음.
+func _boss_blink() -> PackedFloat32Array:
+	var dur := 0.4
+	var b := _buf(dur)
+	var st := SVF.new()
+	var ph := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var zap := st.run(_n(), 6000.0 * exp(-t * 9.0) + 400.0, 0.3).band * exp(-t * 9.0)
+		ph += TAU * (900.0 * exp(-t * 14.0) + 80.0) / SR
+		b[i] = zap + sin(ph) * exp(-t * 10.0) * 0.6
+	return _normalize(b, 0.8)
+
+
+## 반격 자세: 칼날이 우는 "스릉—" (위로 휘어 올라가는 금속 울림).
+func _guard_ring() -> PackedFloat32Array:
+	var dur := 0.55
+	var b := _buf(dur)
+	var st := SVF.new()
+	for i in b.size():
+		var t := float(i) / SR
+		var bend := 1.0 + 0.06 * (1.0 - exp(-t * 10.0))
+		var s := sin(TAU * 1480.0 * bend * t) * 0.7 + sin(TAU * 2960.0 * bend * t) * 0.3 + sin(TAU * 3700.0 * t) * 0.15
+		var scrape := st.run(_n(), 5000.0 + 3000.0 * t, 0.3).band * exp(-t * 14.0) * 0.8
+		b[i] = (s * minf(t / 0.01, 1.0) * exp(-t * 4.5) + scrape)
+	return _normalize(b, 0.75)
+
+
+## 반격 자세에 걸림: 묵직한 막기 "깡!" — 패링보다 낮고 두껍다.
+func _guard_clang() -> PackedFloat32Array:
+	var b := _buf(0.8)
+	var ratios := [1.0, 2.1, 3.3, 4.7, 6.2]
+	var amps := [1.0, 0.7, 0.5, 0.3, 0.2]
+	var st := SVF.new()
+	for i in b.size():
+		var t := float(i) / SR
+		var s := 0.0
+		for k in ratios.size():
+			s += sin(TAU * 620.0 * ratios[k] * t) * amps[k] * exp(-t * (4.0 + k * 2.5))
+		s *= 0.5
+		s += st.run(_n(), 3800.0, 0.5).high * exp(-t * 120.0) * 1.3
+		s += sin(TAU * (48.0 + 60.0 * exp(-t * 18.0)) * t) * exp(-t * 8.0) * 0.8
+		b[i] = tanh(s * 1.5)
+	return _normalize(b, 0.95)
+
+
+## 돌진 준비: 바닥을 긁는 쇳소리 + 차오르는 엔진 같은 저음.
+func _rush_charge() -> PackedFloat32Array:
+	var dur := 1.0
+	var b := _buf(dur)
+	var st := SVF.new()
+	var st2 := SVF.new()
+	var ph := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		var u := t / dur
+		var scrape := st.run(_n(), 2200.0 + 1800.0 * sin(TAU * 11.0 * t), 1.2).band * (0.4 + 0.6 * u)
+		ph += TAU * (45.0 + 70.0 * u * u) / SR
+		var growl := (sin(ph) + 0.5 * sin(ph * 2.0)) * (0.3 + 0.7 * u)
+		var hiss := st2.run(_n(), 600.0, 0.6).band * 0.4 * u
+		var env := clampf(t / 0.05, 0.0, 1.0) * clampf((dur - t) / 0.03, 0.0, 1.0)
+		b[i] = tanh((scrape * 0.8 + growl + hiss) * env * 1.4)
+	return _normalize(b, 0.85)
+
+
+## 보스 쓰러짐: 갑옷이 무너지는 쇳소리 + 긴 공허의 붕괴음 + 거대한 저음.
+func _boss_death() -> PackedFloat32Array:
+	var dur := 2.8
+	var b := _buf(dur)
+	var st := SVF.new()
+	var st2 := SVF.new()
+	var ph := 0.0
+	var ph2 := 0.0
+	for i in b.size():
+		var t := float(i) / SR
+		ph += TAU * (30.0 + 80.0 * exp(-t * 4.0)) / SR
+		var boom := sin(ph) * exp(-t * 1.5) * 1.4
+		var fall := st.run(_n(), 3000.0 * exp(-t * 1.2) + 200.0, 0.4).band * exp(-t * 1.1)
+		var metal := 0.0
+		if rng.randf() < 0.006 * exp(-t * 1.5):
+			metal = _n() * 0.8
+		ph2 += TAU * (520.0 * exp(-t * 0.9) + 60.0) / SR
+		var void_tone := sin(ph2) * exp(-t * 1.2) * 0.35
+		var ring := (sin(TAU * 880.0 * t) + sin(TAU * 1323.0 * t) * 0.5) * exp(-t * 2.0) * 0.12
+		var hiss := st2.run(_n(), 5000.0, 0.5).band * exp(-t * 6.0) * 0.4
+		b[i] = tanh((boom + fall + metal + void_tone + ring + hiss) * 1.3)
+	return _normalize(b, 0.95)
+
+
+## 보스전 음악: 140BPM, 16마디 루프. D단조의 무거운 곡 — 두 박마다 쿵쿵 울리는 킥, 질주하는 16분 베이스,
+## 낮은 성가대 같은 패드, 후반 8마디에 날카로운 아르페지오. 음 꼬리는 앞쪽으로 감싸 이음매 없이 반복된다.
+const BOSS_BEAT := 60.0 / 140.0
+const BOSS_CHORDS := [
+	[38, 41, 45], [38, 41, 45], [34, 38, 41], [37, 40, 45], [38, 41, 45], [39, 43, 46], [34, 38, 41], [37, 40, 45],
+	[38, 41, 45], [36, 39, 43], [34, 38, 41], [37, 40, 45], [38, 41, 45], [39, 43, 46], [41, 45, 48], [37, 40, 45],
+]
+
+
+func _boss_music() -> PackedFloat32Array:
+	var sr := MUSIC_SR
+	var beat := BOSS_BEAT
+	var total := int(beat * 4.0 * BOSS_CHORDS.size() * sr)
+	var mix := PackedFloat32Array()
+	mix.resize(total)
+	var bar_len := beat * 4.0
+	for bar in BOSS_CHORDS.size():
+		var chord: Array = BOSS_CHORDS[bar]
+		var t0 := bar * bar_len
+		# 베이스: 16분음 질주 (박마다 옥타브 강세)
+		for k in 16:
+			var note: float = chord[0] - 12 + (12 if k % 4 == 2 else 0)
+			_add_bass(mix, t0 + k * beat * 0.25, beat * 0.2, _midi(note), 0.24 if k % 4 == 0 else 0.17)
+		# 낮은 성가대 패드 (두 옥타브에 걸쳐)
+		for m in chord:
+			_add_pad(mix, t0, bar_len, _midi(m + 12), 0.05)
+			_add_pad(mix, t0, bar_len, _midi(m + 24), 0.025)
+		# 드럼: 무거운 킥 패턴 + 2·4박 스네어 + 8분 하이햇
+		for beat_i in 4:
+			var tb := t0 + beat_i * beat
+			if beat_i == 0 or beat_i == 2:
+				_add_kick(mix, tb, 0.95)
+				_add_kick(mix, tb + beat * 0.5, 0.55)
+			else:
+				_add_snare(mix, tb, 0.55)
+			_add_hat(mix, tb + beat * 0.5, 0.14)
+			_add_hat(mix, tb, 0.07)
+		if bar % 4 == 3:
+			for k in 4:
+				_add_snare(mix, t0 + beat * 3.0 + k * beat * 0.25, 0.25 + 0.08 * k)
+		# 후반 아르페지오
+		if bar >= 8:
+			var arp := [chord[0] + 24, chord[2] + 24, chord[1] + 36, chord[2] + 24]
+			for k in 16:
+				_add_pluck(mix, t0 + k * beat * 0.25, beat * 0.2, _midi(arp[k % 4]), 0.06)
+	var dl := int(beat * 0.75 * sr)
+	var wet := mix.duplicate()
+	for pass_i in 2:
+		for i in total:
+			wet[i] = mix[i] + wet[(i - dl + total) % total] * 0.28
+	for i in total:
+		mix[i] = tanh((mix[i] * 0.85 + (wet[i] - mix[i]) * 0.3) * 1.4)
+	return _normalize(mix, 0.8)

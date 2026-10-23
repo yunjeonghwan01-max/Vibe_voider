@@ -44,7 +44,7 @@ const EYE := Vector2(0.0, 0.0)          # 바늘/광선이 나가는 곳 (몸 �
 @export var beam_range: float = 2400.0
 @export var beam_scene: PackedScene
 
-@onready var tell: WatcherTell = $Tell
+@onready var tell: CounterTell = $Tell
 @onready var sfx_needle: AudioStreamPlayer2D = $Audio/Needle
 @onready var sfx_charge: AudioStreamPlayer2D = $Audio/Charge
 @onready var sfx_cue: AudioStreamPlayer2D = $Audio/Cue
@@ -218,14 +218,14 @@ func _begin_charge() -> void:
 	_atk_timer = charge_time
 	_has_repos = false
 	tell.progress = 0.0
-	tell.mode = WatcherTell.Mode.CHARGE
+	tell.mode = CounterTell.Mode.CHARGE
 	_sfx(sfx_charge, 0.0)
 
 
 func _begin_window() -> void:
 	_atk = Atk.WINDOW
 	_atk_timer = window_time
-	tell.mode = WatcherTell.Mode.WINDOW
+	tell.mode = CounterTell.Mode.WINDOW
 	tell.aim_point = get_target().global_position
 	visual.scale = Vector2(1.35 * signf(facing), 1.35)
 	_flash_col = Color.WHITE
@@ -244,7 +244,7 @@ func _has_armor() -> bool:
 
 ## 받아치지 못했다 — 확정 히트스캔 광선.
 func _fire_beam() -> void:
-	tell.mode = WatcherTell.Mode.OFF
+	tell.mode = CounterTell.Mode.OFF
 	_atk = Atk.RECOVER
 	_atk_timer = recover_time
 	var t := get_target()
@@ -304,7 +304,7 @@ func on_countered(_from_pos: Vector2) -> void:
 	if state == State.DEAD:
 		return
 	_atk = Atk.COUNTERED
-	tell.mode = WatcherTell.Mode.OFF
+	tell.mode = CounterTell.Mode.OFF
 	sfx_charge.stop()
 	state = State.STAGGER
 	_state_timer = 3.0
@@ -327,8 +327,12 @@ func _on_hurt(_source: Node) -> void:
 
 
 func _on_watcher_died() -> void:
-	tell.mode = WatcherTell.Mode.OFF
+	tell.mode = CounterTell.Mode.OFF
 	sfx_charge.stop()
+
+
+func _on_banished() -> void:
+	_on_watcher_died()
 
 
 # ─────────────────────────── 외형 ───────────────────────────

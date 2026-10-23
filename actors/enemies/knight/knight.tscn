@@ -1,0 +1,236 @@
+[gd_scene load_steps=44 format=3]
+
+[ext_resource type="Script" path="res://actors/enemies/knight/knight.gd" id="1_knight"]
+[ext_resource type="Script" path="res://combat/effects/counter_tell/counter_tell.gd" id="2_tell"]
+[ext_resource type="Script" path="res://combat/components/health/health.gd" id="3_health"]
+[ext_resource type="Script" path="res://combat/components/hurtbox/hurtbox.gd" id="4_hurt"]
+[ext_resource type="Script" path="res://combat/components/hitbox/hitbox.gd" id="5_hit"]
+[ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="6_spark"]
+[ext_resource type="PackedScene" path="res://combat/effects/slash/slash.tscn" id="7_slash"]
+[ext_resource type="PackedScene" path="res://combat/effects/glint/glint.tscn" id="8_glint"]
+[ext_resource type="PackedScene" path="res://combat/effects/afterimage/afterimage.tscn" id="9_after"]
+[ext_resource type="PackedScene" path="res://combat/effects/ground_impact/ground_impact.tscn" id="10_impact"]
+[ext_resource type="PackedScene" path="res://combat/attacks/x_slash/x_slash.tscn" id="11_xslash"]
+[ext_resource type="Shader" path="res://combat/effects/hit_flash/hit_flash.gdshader" id="12_flash"]
+[ext_resource type="Texture2D" path="res://assets/temporary/characters/knight/knight.png" id="13_tex"]
+[ext_resource type="Texture2D" path="res://assets/temporary/characters/knight/knight_sword.png" id="14_sword"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/glint.wav" id="a_glint"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/boss_swing.wav" id="a_swing"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/boss_step.wav" id="a_step"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/boss_land.wav" id="a_land"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/boss_slam.wav" id="a_slam"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/boss_roar.wav" id="a_roar"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/boss_blink.wav" id="a_blink"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/guard_ring.wav" id="a_gring"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/guard_clang.wav" id="a_gclang"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/rush_charge.wav" id="a_rush"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/counter_charge.wav" id="a_charge"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/counter_cue.wav" id="a_cue"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/boss_death.wav" id="a_death"]
+
+[sub_resource type="ShaderMaterial" id="Mat_flash"]
+resource_local_to_scene = true
+shader = ExtResource("12_flash")
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+shader_parameter/flash = 0.0
+
+[sub_resource type="CapsuleShape2D" id="Cap_body"]
+radius = 26.0
+height = 150.0
+
+[sub_resource type="CapsuleShape2D" id="Cap_hurt"]
+radius = 34.0
+height = 160.0
+
+[sub_resource type="CircleShape2D" id="Circ_attack"]
+radius = 80.0
+
+[sub_resource type="RectangleShape2D" id="Rect_slam"]
+size = Vector2(110, 180)
+
+[sub_resource type="RectangleShape2D" id="Rect_shock"]
+size = Vector2(380, 60)
+
+[sub_resource type="RectangleShape2D" id="Rect_rush"]
+size = Vector2(120, 170)
+
+[sub_resource type="CapsuleShape2D" id="Cap_guard"]
+radius = 40.0
+height = 170.0
+
+[node name="Knight" type="CharacterBody2D"]
+z_index = 1
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_knight")
+slash_scene = ExtResource("7_slash")
+afterimage_scene = ExtResource("9_after")
+impact_scene = ExtResource("10_impact")
+xslash_scene = ExtResource("11_xslash")
+gravity = 2200.0
+move_speed = 110.0
+parry_stagger_time = 1.3
+knockback_resist = 0.8
+spark_scene = ExtResource("6_spark")
+glint_scene = ExtResource("8_glint")
+
+[node name="Visual" type="Node2D" parent="."]
+material = SubResource("Mat_flash")
+
+[node name="Body" type="Sprite2D" parent="Visual"]
+use_parent_material = true
+position = Vector2(0, 75)
+scale = Vector2(2, 2)
+texture = ExtResource("13_tex")
+centered = false
+offset = Vector2(-36, -93)
+hframes = 16
+
+[node name="Sword" type="Sprite2D" parent="Visual"]
+use_parent_material = true
+position = Vector2(26, -3)
+rotation = 1.08
+scale = Vector2(2, 2)
+texture = ExtResource("14_sword")
+centered = false
+offset = Vector2(-8, -6)
+
+[node name="BodyCollision" type="CollisionShape2D" parent="."]
+shape = SubResource("Cap_body")
+
+[node name="Tell" type="Node2D" parent="."]
+z_index = 2
+script = ExtResource("2_tell")
+
+[node name="Combat" type="Node2D" parent="."]
+
+[node name="Health" type="Node" parent="Combat"]
+script = ExtResource("3_health")
+max_hp = 1800
+
+[node name="Hurtbox" type="Area2D" parent="Combat"]
+collision_layer = 16
+collision_mask = 0
+monitoring = false
+script = ExtResource("4_hurt")
+health = NodePath("../Health")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/Hurtbox"]
+shape = SubResource("Cap_hurt")
+
+[node name="AttackHitbox" type="Area2D" parent="Combat"]
+position = Vector2(108, -42)
+collision_layer = 64
+collision_mask = 8
+monitoring = false
+script = ExtResource("5_hit")
+damage = 22
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/AttackHitbox"]
+shape = SubResource("Circ_attack")
+
+[node name="SlamHitbox" type="Area2D" parent="Combat"]
+collision_layer = 0
+collision_mask = 8
+monitoring = false
+script = ExtResource("5_hit")
+damage = 26
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/SlamHitbox"]
+shape = SubResource("Rect_slam")
+
+[node name="ShockHitbox" type="Area2D" parent="Combat"]
+position = Vector2(0, 50)
+collision_layer = 0
+collision_mask = 8
+monitoring = false
+script = ExtResource("5_hit")
+damage = 15
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/ShockHitbox"]
+shape = SubResource("Rect_shock")
+
+[node name="RushHitbox" type="Area2D" parent="Combat"]
+position = Vector2(34, -6)
+collision_layer = 64
+collision_mask = 8
+monitoring = false
+script = ExtResource("5_hit")
+damage = 26
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/RushHitbox"]
+shape = SubResource("Rect_rush")
+
+[node name="Sensors" type="Node2D" parent="."]
+
+[node name="CounterGuard" type="Area2D" parent="Sensors"]
+collision_layer = 0
+collision_mask = 32
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Sensors/CounterGuard"]
+shape = SubResource("Cap_guard")
+
+[node name="Audio" type="Node2D" parent="."]
+
+[node name="Glint" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_glint")
+max_distance = 3000.0
+
+[node name="Swing" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_swing")
+volume_db = -2.0
+max_distance = 3000.0
+
+[node name="Step" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_step")
+volume_db = -6.0
+max_distance = 3000.0
+max_polyphony = 3
+
+[node name="Land" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_land")
+max_distance = 4000.0
+
+[node name="Slam" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_slam")
+volume_db = -1.0
+max_distance = 4000.0
+
+[node name="Roar" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_roar")
+volume_db = -2.0
+max_distance = 4000.0
+
+[node name="Blink" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_blink")
+volume_db = -5.0
+max_distance = 3000.0
+
+[node name="GuardRing" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_gring")
+volume_db = -3.0
+max_distance = 3000.0
+
+[node name="GuardClang" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_gclang")
+max_distance = 3000.0
+
+[node name="RushCharge" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_rush")
+volume_db = -3.0
+max_distance = 3000.0
+
+[node name="Charge" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_charge")
+volume_db = -4.0
+max_distance = 3000.0
+
+[node name="Cue" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_cue")
+max_distance = 3000.0
+
+[node name="Death" type="AudioStreamPlayer2D" parent="Audio"]
+stream = ExtResource("a_death")
+max_distance = 4000.0

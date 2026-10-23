@@ -1,7 +1,7 @@
 [gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://actors/enemies/watcher/watcher.gd" id="1_watcher"]
-[ext_resource type="Script" path="res://actors/enemies/watcher/watcher_tell.gd" id="2_tell"]
+[ext_resource type="Script" path="res://combat/effects/counter_tell/counter_tell.gd" id="2_tell"]
 [ext_resource type="Script" path="res://combat/components/health/health.gd" id="3_health"]
 [ext_resource type="Script" path="res://combat/components/hurtbox/hurtbox.gd" id="4_hurt"]
 [ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="5_spark"]
