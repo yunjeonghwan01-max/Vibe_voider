@@ -63,3 +63,10 @@ or resources, read `docs/structure.md`.
 ## Communication
 
 Communicate with the user in Korean. Keep code, identifiers, and technical terminology in English.
+
+## Tuning Sheets
+
+`docs/tuning/` holds one Korean tuning sheet per object scene (player, each enemy/boss) listing the player-facing tunable values: HP, damage, cooldowns, resources (ultimate gauge, etc.), and key timings, with each value's location.
+- Whenever you change any such value (in `.gd` or `.tscn`), update the matching sheet in the same change. Record the effective value (`.tscn` overrides win over script defaults).
+- When adding a new object scene with tunable values, create its sheet and list it in `docs/tuning/README.md`. When removing one, remove its sheet.
+- When the human asks to change a number by name ("보스 체력 올려"), use the sheet to find it.
