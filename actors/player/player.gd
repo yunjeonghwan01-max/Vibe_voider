@@ -993,6 +993,10 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	if health.hp - damage <= 0:
 		return                          # 치명타는 _on_died가 처리
 	_add_ultimate(ult_charge_on_damaged)
+	var enemy := source as Enemy
+	if enemy != null and enemy.is_contact_hit:
+		_on_contact_hit(damage, knockback)
+		return
 	GameFeel.hit_stop(0.07)
 	GameFeel.shake(0.4)
 	GameFeel.flash(Color(1.0, 0.25, 0.25), 0.18, 0.12)
@@ -1014,6 +1018,18 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	trail.visible = false
 	_set_flash(Color(1.0, 0.35, 0.35), 0.9)
 	visual.play(&"hurt")
+
+
+## 몸에 부딪힌 가벼운 피격: 경직·콤보 끊김 없이 밀려나기만 한다 (조작은 계속된다).
+func _on_contact_hit(damage: int, knockback: Vector2) -> void:
+	GameFeel.shake(0.2)
+	GameFeel.flash(Color(1.0, 0.25, 0.25), 0.1, 0.1)
+	_sfx(sfx_hurt, 0.06)
+	health_changed.emit(health.hp - damage, health.max_hp)
+	velocity.x = knockback.x
+	if is_on_floor():
+		velocity.y = minf(velocity.y, knockback.y)
+	_set_flash(Color(1.0, 0.35, 0.35), 0.7)
 
 
 func _process_hurt(delta: float) -> void:

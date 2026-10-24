@@ -37,7 +37,7 @@ const MAX_AIRBORNE := 1.4
 
 @export_group("Contact")
 @export var contact_damage: int = 6          # 몸에 닿으면 주는 피해 (플레이어 피격 무적 동안은 다시 안 들어간다)
-@export var contact_knockback: float = 220.0
+@export var contact_knockback: float = 380.0
 
 @export_group("Glint")
 @export var glint_duration: float = 0.4      # 반격 가능한 반짝임 시간
@@ -69,6 +69,8 @@ var _flash_col: Color = Color.WHITE
 var _airborne: bool = false
 var _air_t: float = 0.0
 var _contact_area: Area2D = null
+## 접촉 피해를 주는 순간에만 true — 피격자가 hit_received 안에서 보고 가벼운 반응(경직 없음)으로 처리한다.
+var is_contact_hit: bool = false
 
 
 func _enter_tree() -> void:
@@ -466,7 +468,9 @@ func _apply_contact_damage() -> void:
 		var dir := signf(hb.global_position.x - global_position.x)
 		if dir == 0.0:
 			dir = facing
-		hb.receive_hit(contact_damage, self, Vector2(dir * contact_knockback, -contact_knockback * 0.6))
+		is_contact_hit = true
+		hb.receive_hit(contact_damage, self, Vector2(dir * contact_knockback, -contact_knockback * 0.35))
+		is_contact_hit = false
 
 
 ## 하위 클래스 훅: 특정 동작 중(사라져 있을 때 등) 접촉 피해를 끈다.
