@@ -29,6 +29,8 @@
 | 첫 발동 / 쿨타임 | 5.0 / 6.0 | `stance_first` / `stance_cooldown` |
 | 자세 시간 / 감지 거리 | 0.4 / 340 | `stance_time` / `stance_range` |
 | 내려찍기 데미지 | 26 (충격파 15 = ×0.6) | `slam_damage` |
+| 내려찍기 판정 폭 | 200 (발판 관통) | tscn `Rect_slam` |
+| 충격파 폭 / 넉백 | 1100 / 480 | `shock_width` + tscn `Rect_shock` |
 | 내려찍기 후딜 | 0.85 | `slam_recover` |
 | 역반격 창 (실제 시간) / 슬로모 배율 | 0.5 / 0.1 | `bait_time` / `bait_time_scale` |
 | 역반격 성공 데미지 / 기절 | 160 / 2.8 | `bait_counter_damage` / `bait_stun` |

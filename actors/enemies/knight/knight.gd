@@ -89,6 +89,7 @@ const DANGER_COLOR := Color(1.0, 0.25, 0.22)
 @export var slam_speed: float = 2300.0
 @export var slam_damage: int = 26
 @export var slam_recover: float = 0.85
+@export var shock_width: float = 1100.0       # 착지 충격파의 좌우 전체 폭 (발판을 뚫고 바닥까지 내려와 터진다)
 @export var bait_time: float = 0.5            # 역반격 창 (실제 시간 초 — 세상은 bait_time_scale로 느려진다)
 @export var bait_time_scale: float = 0.1
 @export var bait_counter_damage: int = 160    # 역반격 성공 X자 결정타
@@ -317,8 +318,11 @@ func _enemy_ai(delta: float) -> void:
 			if _t <= 0.0:
 				_begin_slam_fall()
 		Atk.SLAM_FALL:
+			# 발판에 걸리지 않고 바닥까지 뚫고 내려간다
 			velocity = Vector2(0.0, slam_speed)
-			if is_on_floor():
+			if global_position.y + FOOT + slam_speed * delta >= floor_y:
+				global_position.y = floor_y - FOOT
+				velocity = Vector2.ZERO
 				_slam_land()
 		Atk.SLAM_RECOVER:
 			velocity.x = move_toward(velocity.x, 0.0, 2000.0 * delta)
@@ -654,7 +658,7 @@ func _appear_above_target() -> void:
 func _begin_slam_fall() -> void:
 	_atk = Atk.SLAM_FALL
 	_float = false
-	collision_mask = CollisionLayers.WORLD
+	collision_mask = 0
 	slam_hitbox.reset_hits()
 	slam_hitbox.damage = slam_damage
 	slam_hitbox.knockback_force = 420.0
@@ -668,16 +672,24 @@ func _slam_land() -> void:
 	velocity = Vector2.ZERO
 	_atk = Atk.SLAM_RECOVER
 	_t = slam_recover
-	_heavy_land(0.75)
-	GameFeel.hit_stop(0.05)
-	# 착지 충격파 — 양옆으로 짧게
+	collision_mask = CollisionLayers.WORLD
+	# 등장 착지만큼 무거운 연출 — 땅이 갈라지고 화면이 크게 흔들린다
+	_heavy_land(1.0)
+	GameFeel.hit_stop(0.1)
+	GameFeel.flash(Color(0.9, 0.3, 0.3), 0.3, 0.35)
+	var ground := Vector2(global_position.x, floor_y)
+	_spawn_impact(ground, 1.0, 14.0)
+	for side in [-1.0, 1.0]:
+		_spawn_impact(ground + Vector2(side * shock_width * 0.3, 0.0), 0.6, 8.0)
+	_burst(Color(1.0, 0.4, 0.35, 1.0), 30, 160.0, 0.5, true)
+	# 착지 충격파 — 바닥을 따라 넓게
 	shock_hitbox.reset_hits()
 	shock_hitbox.damage = int(slam_damage * 0.6)
-	shock_hitbox.knockback_force = 380.0
+	shock_hitbox.knockback_force = 480.0
 	var t := get_target()
 	shock_hitbox.knockback_direction = Vector2(signf(t.global_position.x - global_position.x), -0.8).normalized()
 	shock_hitbox.monitoring = true
-	get_tree().create_timer(0.1, false).timeout.connect(func() -> void:
+	get_tree().create_timer(0.15, false).timeout.connect(func() -> void:
 		if is_instance_valid(shock_hitbox):
 			shock_hitbox.monitoring = false)
 
@@ -1070,6 +1082,10 @@ func _draw() -> void:
 			var w := lerpf(130.0, 70.0, k)
 			draw_rect(Rect2(-w * 0.5, FOOT, w, depth - FOOT), Color(DANGER_COLOR.r, DANGER_COLOR.g, DANGER_COLOR.b, 0.12 + 0.12 * pulse))
 			draw_line(Vector2(-w * 0.5, depth), Vector2(w * 0.5, depth), Color(1.0, 0.5, 0.4, 0.9 * pulse), 4.0)
+			# 충격파가 덮을 바닥 범위
+			var sw := shock_width * 0.5
+			draw_rect(Rect2(-sw, depth - 60.0, shock_width, 60.0), Color(DANGER_COLOR.r, DANGER_COLOR.g, DANGER_COLOR.b, (0.05 + 0.12 * k) * pulse))
+			draw_line(Vector2(-sw, depth), Vector2(sw, depth), Color(1.0, 0.45, 0.35, (0.3 + 0.5 * k) * pulse), 3.0)
 		Atk.RUSH_WINDUP:
 			var k := clampf(_danger / rush_windup, 0.0, 1.0)
 			var edge := (room_x.y if facing > 0.0 else room_x.x) - global_position.x
