@@ -18,6 +18,7 @@
 [ext_resource type="PackedScene" path="res://combat/attacks/x_slash/x_slash.tscn" id="13_counter"]
 [ext_resource type="Script" uid="uid://c38qqiperccge" path="res://actors/player/abilities/lightning/lightning_ability.gd" id="14_lightning"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/lightning/lightning_bolt.tscn" id="15_bolt"]
+[ext_resource type="Script" path="res://actors/player/abilities/rising_slash/rising_slash_ability.gd" id="18_rising"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/haki/haki_burst.tscn" id="16_haki"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/moon_slash/moon_slash.tscn" id="17_moon"]
 [ext_resource type="AudioStream" uid="uid://cnlltvsiboews" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
@@ -58,6 +59,9 @@ radius = 36.0
 
 [sub_resource type="CircleShape2D" id="Circ_parry"]
 radius = 72.0
+
+[sub_resource type="CircleShape2D" id="Circ_rising"]
+radius = 120.0
 
 [sub_resource type="RectangleShape2D" id="Rect_dash_slash"]
 size = Vector2(260, 50)
@@ -165,6 +169,20 @@ shape = SubResource("Rect_dash_slash")
 [node name="Lightning" type="Node2D" parent="Combat" unique_id=1169862715]
 script = ExtResource("14_lightning")
 bolt_scene = ExtResource("15_bolt")
+
+[node name="RisingSlash" type="Node2D" parent="Combat"]
+z_index = 1
+script = ExtResource("18_rising")
+
+[node name="Hitbox" type="Area2D" parent="Combat/RisingSlash"]
+position = Vector2(0, -8)
+collision_layer = 32
+collision_mask = 16
+monitoring = false
+script = ExtResource("5_hit")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/RisingSlash/Hitbox"]
+shape = SubResource("Circ_rising")
 
 [node name="Audio" type="Node2D" parent="." unique_id=1525423985]
 

@@ -26,7 +26,7 @@ signal ultimate_changed(charge: float, max_charge: float)
 signal ultimate_ready_changed(is_ready: bool)
 signal died
 
-enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, ULTIMATE, HURT, DEAD }
+enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SLASH, ULTIMATE, HURT, DEAD }
 
 # ─────────────────────────── 이동 튜닝 ───────────────────────────
 @export_group("Movement")
@@ -91,6 +91,11 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, ULTIMATE,
 @export_group("Lightning")
 @export var lightning_recovery: float = 0.2      # 번개가 꽂힌 뒤에도 이만큼 이동 불가 (도달 전에는 공중이면 떠 있다)
 
+@export_group("Rising Slash")
+@export var rising_windup: float = 1.0           # 자세를 낮추고 모으는 시간 (이동 불가, 공중이면 떠 있다)
+@export var rising_launch_velocity: float = -820.0
+@export var rising_bump_fall_speed: float = 320.0  # 튀어 오르다 적 몸에 부딪히면 이 속도로 떨어진다
+
 @export_group("Ultimate")
 @export var ultimate_max: float = 100.0
 @export var ult_charge_on_parry: float = 34.0
@@ -117,6 +122,7 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, ULTIMATE,
 @onready var void_orb: VoidOrbAbility = $Combat/VoidOrb
 @onready var dash_slash: DashSlashAbility = $Combat/DashSlash
 @onready var lightning: LightningAbility = $Combat/Lightning
+@onready var rising_slash: RisingSlashAbility = $Combat/RisingSlash
 @onready var sfx_swing: Array[AudioStreamPlayer2D] = [
 	$Audio/Swing1 as AudioStreamPlayer2D, $Audio/Swing2 as AudioStreamPlayer2D, $Audio/Swing3 as AudioStreamPlayer2D]
 @onready var sfx_hit: AudioStreamPlayer2D = $Audio/Hit
@@ -165,6 +171,7 @@ var _dash_slash_queued: bool = false   # 대시 중 E 입력 → 대시가 끝�
 var _dash_slash_window: float = 0.0    # 대시 직후 대시 참격 유예 시간 (남은 초)
 var _dash_start_pos: Vector2 = Vector2.ZERO   # 마지막 대시를 시작한 곳 — 대시 참격이 지나온 길까지 벤다
 var _lightning_struck: bool = false
+var _rising_up: bool = false          # 승천 참격으로 튀어 오르는 중 (적 몸에 부딪히면 떨어진다)
 
 var _iframe_t: float = 0.0            # 피격 무적 남은 시간 (깜빡임 표시용 — 실제 무적은 Hurtbox가 처리)
 var _squash: Vector2 = Vector2.ONE   # 스쿼시&스트레치
@@ -190,6 +197,7 @@ func _ready() -> void:
 	void_orb.ready_again.connect(_on_skill_ready)
 	dash_slash.hit_landed.connect(_on_dash_slash_landed)
 	lightning.hit_landed.connect(_on_lightning_hit)
+	rising_slash.hit_landed.connect(_on_lightning_hit)
 
 	attack_hitbox.source = self
 	attack_hitbox.monitoring = false
@@ -242,6 +250,8 @@ func _physics_process(delta: float) -> void:
 			_process_skill(delta)
 		Action.LIGHTNING:
 			_process_lightning(delta)
+		Action.RISING_SLASH:
+			_process_rising_slash(delta)
 		Action.DASH_SLASH:
 			_process_dash_slash(delta)
 		Action.ULTIMATE:
@@ -272,6 +282,8 @@ func _tick_timers(delta: float) -> void:
 	_dash_cd = maxf(_dash_cd - delta, 0.0)
 	_parry_cd = maxf(_parry_cd - delta, 0.0)
 	_dash_slash_window = maxf(_dash_slash_window - delta, 0.0)
+	if _rising_up and (velocity.y >= 0.0 or is_on_floor()):
+		_rising_up = false
 	if _combo_timer > 0.0:
 		_combo_timer = maxf(_combo_timer - delta, 0.0)
 		if _combo_timer == 0.0:
@@ -297,7 +309,12 @@ func _process_free(delta: float) -> void:
 		_start_dash_slash()
 		return
 	# 위(W/↑)를 누른 채 E = 벼락. 쿨다운 중이면 아무것도 나가지 않는다 (장풍으로 새지 않게).
-	if Input.is_action_just_pressed("player_skill") and _up_held():
+	# 아래(S/↓)를 누른 채 E = 승천 참격. 쿨다운 중이면 아무것도 나가지 않는다.
+	if Input.is_action_just_pressed("player_skill") and _down_held():
+		if rising_slash.can_use():
+			_start_rising_slash()
+			return
+	elif Input.is_action_just_pressed("player_skill") and _up_held():
 		if lightning.can_cast():
 			_start_lightning()
 			return
@@ -321,6 +338,10 @@ func _process_free(delta: float) -> void:
 
 func _up_held() -> bool:
 	return Input.is_action_pressed("player_move_up")
+
+
+func _down_held() -> bool:
+	return Input.is_action_pressed("player_move_down")
 
 
 func _move_input() -> float:
@@ -646,6 +667,40 @@ func _process_lightning(delta: float) -> void:
 	if _action_time >= lightning.travel_time + lightning_recovery:
 		action = Action.NONE
 		visual.play(&"locomotion")
+
+
+# ─────────────────────────── 스킬: 승천 참격 ───────────────────────────
+## 웅크려 모으는 동안 그 자리에 굳는다 (공중이면 떠 있다). 모으기가 끝나면 원을 한 번에 베고 위로 튀어 오른다.
+## 튀어 오르는 순간부터는 자유 상태라 공중 조작이 된다. 몸통 판정은 없고, 적 몸에 부딪히면 떨어진다.
+func _start_rising_slash() -> void:
+	action = Action.RISING_SLASH
+	_action_time = 0.0
+	rising_slash.start_cooldown()
+	velocity = Vector2.ZERO
+	_set_flash(Color(0.7, 0.5, 1.0), 0.45)
+	visual.play(&"rising_crouch")
+
+
+func _process_rising_slash(delta: float) -> void:
+	_action_time += delta
+	velocity = Vector2.ZERO
+	# 모으는 동안 점점 더 낮게 웅크린다
+	var k := clampf(_action_time / rising_windup, 0.0, 1.0)
+	_squash = Vector2(1.0 + 0.3 * k, 1.0 - 0.3 * k)
+	if _action_time < rising_windup:
+		if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+			_start_parry()
+		return
+	var airborne := not is_on_floor()
+	rising_slash.sweep(self, facing, airborne)
+	visual.play(&"rising_sweep_air" if airborne else &"rising_sweep")
+	_sfx(sfx_dash_slash, 0.05)
+	GameFeel.shake(0.25)
+	_squash = Vector2(0.7, 1.35)
+	_set_flash(Color(0.92, 0.82, 1.0), 0.8)
+	velocity = Vector2(0.0, rising_launch_velocity)
+	_rising_up = true
+	action = Action.NONE
 
 
 func _on_lightning_hit(_hurt: HurtboxComponent) -> void:
@@ -1018,6 +1073,8 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	_action_time = 0.0
 	attack_hitbox.monitoring = false
 	dash_slash.set_active(false)
+	rising_slash.cancel()
+	_rising_up = false
 	_cancel_chain()
 	_dash_slash_queued = false
 	trail.visible = false
@@ -1032,7 +1089,11 @@ func _on_contact_hit(damage: int, knockback: Vector2) -> void:
 	_sfx(sfx_hurt, 0.06)
 	health_changed.emit(health.hp - damage, health.max_hp)
 	velocity.x = knockback.x
-	if is_on_floor():
+	if _rising_up:
+		# 승천 참격으로 튀어 오르다 부딪히면 그대로 떨어진다
+		_rising_up = false
+		velocity.y = rising_bump_fall_speed
+	elif is_on_floor():
 		velocity.y = minf(velocity.y, knockback.y)
 	_set_flash(Color(1.0, 0.35, 0.35), 0.7)
 
@@ -1055,6 +1116,8 @@ func _on_died() -> void:
 	action = Action.DEAD
 	attack_hitbox.monitoring = false
 	dash_slash.set_active(false)
+	rising_slash.cancel()
+	_rising_up = false
 	_cancel_chain()
 	_dash_slash_queued = false
 	hurtbox.invincible = true
