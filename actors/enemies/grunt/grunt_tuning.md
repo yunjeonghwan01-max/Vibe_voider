@@ -1,5 +1,7 @@
 # 졸개 (Grunt) — `actors/enemies/grunt/grunt.tscn`
 
+> 단위: 시간 = 초, 거리 = px, 속도 = px/s. `.tscn`에서 덮어쓴 값이 있으면 그 값이 실제 적용값.
+
 | 항목 | 값 | 위치 |
 |---|---|---|
 | 최대 체력 | 36 | `Combat/Health.max_hp` (tscn) |

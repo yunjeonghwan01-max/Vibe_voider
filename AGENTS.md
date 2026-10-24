@@ -66,7 +66,7 @@ Communicate with the user in Korean. Keep code, identifiers, and technical termi
 
 ## Tuning Sheets
 
-`docs/tuning/` holds one Korean tuning sheet per object scene (player, each enemy/boss) listing the player-facing tunable values: HP, damage, cooldowns, resources (ultimate gauge, etc.), and key timings, with each value's location.
+Every object scene with player-facing tunable values (player, each enemy/boss) has a Korean tuning sheet next to it: `<scene>_tuning.md` in the same folder as `<scene>.tscn` (e.g. `actors/enemies/grunt/grunt_tuning.md`). It lists HP, damage, cooldowns, resources (ultimate gauge, etc.), and key timings, with each value's location. Values of sub-scenes owned by the object (abilities, projectiles) go in the owner's sheet.
 - Whenever you change any such value (in `.gd` or `.tscn`), update the matching sheet in the same change. Record the effective value (`.tscn` overrides win over script defaults).
-- When adding a new object scene with tunable values, create its sheet and list it in `docs/tuning/README.md`. When removing one, remove its sheet.
+- When adding a new object scene with tunable values, create its sheet next to it. When removing or moving the scene, remove or move its sheet with it.
 - When the human asks to change a number by name ("보스 체력 올려"), use the sheet to find it.
