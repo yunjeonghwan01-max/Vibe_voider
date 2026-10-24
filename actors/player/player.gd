@@ -166,6 +166,7 @@ var _dash_slash_window: float = 0.0    # 대시 직후 대시 참격 유예 시�
 var _dash_start_pos: Vector2 = Vector2.ZERO   # 마지막 대시를 시작한 곳 — 대시 참격이 지나온 길까지 벤다
 var _lightning_struck: bool = false
 
+var _iframe_t: float = 0.0            # 피격 무적 남은 시간 (깜빡임 표시용 — 실제 무적은 Hurtbox가 처리)
 var _squash: Vector2 = Vector2.ONE   # 스쿼시&스트레치
 var _attack_hitbox_base_pos: Vector2
 var _was_on_floor: bool = false
@@ -206,7 +207,10 @@ func _ready() -> void:
 	ultimate_changed.emit(ult_charge, ultimate_max)
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _iframe_t > 0.0:
+		_iframe_t -= delta
+		visual.modulate.a = 1.0 if _iframe_t <= 0.0 or int(_iframe_t * 16.0) % 2 == 0 else 0.3
 	# 보스의 역반격 창처럼 세상이 느려진 동안엔 물리 프레임이 드물다 — 그 사이의 반격 입력을 모아 둔다.
 	if Engine.time_scale < 1.0 and Input.is_action_just_pressed("player_parry") and _can_take_counter_press() 			and not _open_counter_threats().is_empty():
 		_counter_buffered = true
@@ -993,6 +997,7 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	if health.hp - damage <= 0:
 		return                          # 치명타는 _on_died가 처리
 	_add_ultimate(ult_charge_on_damaged)
+	_iframe_t = hurtbox.invincibility_duration
 	var enemy := source as Enemy
 	if enemy != null and enemy.is_contact_hit:
 		_on_contact_hit(damage, knockback)
