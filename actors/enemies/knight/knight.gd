@@ -684,6 +684,8 @@ func _slam_land() -> void:
 	_burst(Color(1.0, 0.4, 0.35, 1.0), 30, 160.0, 0.5, true)
 	# 착지 충격파 — 바닥을 따라 넓게
 	shock_hitbox.reset_hits()
+	var shock_shape := ($Combat/ShockHitbox/CollisionShape2D as CollisionShape2D).shape as RectangleShape2D
+	shock_shape.size.x = shock_width
 	shock_hitbox.damage = int(slam_damage * 0.6)
 	shock_hitbox.knockback_force = 480.0
 	var t := get_target()
