@@ -92,8 +92,8 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SL
 @export var lightning_recovery: float = 0.2      # 번개가 꽂힌 뒤에도 이만큼 이동 불가 (도달 전에는 공중이면 떠 있다)
 
 @export_group("Rising Slash")
-@export var rising_windup: float = 1.0           # 자세를 낮추고 모으는 시간 (이동 불가, 공중이면 떠 있다)
-@export var rising_launch_velocity: float = -820.0
+@export var rising_windup: float = 0.5           # 자세를 낮추고 모으는 시간 (이동 불가, 공중이면 떠 있다)
+@export var rising_launch_velocity: float = -1000.0
 @export var rising_bump_fall_speed: float = 320.0  # 튀어 오르다 적 몸에 부딪히면 이 속도로 떨어진다
 
 @export_group("Ultimate")
@@ -365,7 +365,8 @@ func _apply_gravity(delta: float) -> void:
 	if velocity.y > 0.0:
 		g *= fall_gravity_mult
 	# 점프 버튼을 떼면 상승을 잘라 가변 높이를 만든다.
-	if velocity.y < 0.0 and not Input.is_action_pressed("player_jump"):
+	# (승천 참격으로 튀어 오를 때는 자르지 않는다 — 기본으로 끝까지 높이 오른다)
+	if velocity.y < 0.0 and not _rising_up and not Input.is_action_pressed("player_jump"):
 		velocity.y *= jump_cut_mult
 	velocity.y = minf(velocity.y + g * delta, max_fall_speed)
 
@@ -676,6 +677,7 @@ func _start_rising_slash() -> void:
 	action = Action.RISING_SLASH
 	_action_time = 0.0
 	rising_slash.start_cooldown()
+	rising_slash.begin_charge(rising_windup)
 	velocity = Vector2.ZERO
 	_set_flash(Color(0.7, 0.5, 1.0), 0.45)
 	visual.play(&"rising_crouch")
@@ -684,9 +686,10 @@ func _start_rising_slash() -> void:
 func _process_rising_slash(delta: float) -> void:
 	_action_time += delta
 	velocity = Vector2.ZERO
-	# 모으는 동안 점점 더 낮게 웅크린다
-	var k := clampf(_action_time / rising_windup, 0.0, 1.0)
-	_squash = Vector2(1.0 + 0.3 * k, 1.0 - 0.3 * k)
+	# 순식간에 낮게 웅크리고, 모으는 동안 미세하게 떨린다
+	var k := clampf(_action_time / 0.08, 0.0, 1.0)
+	var tremble := 0.03 * sin(_action_time * 90.0) * clampf(_action_time / rising_windup, 0.0, 1.0)
+	_squash = Vector2(1.0 + 0.3 * k + tremble, 1.0 - 0.32 * k)
 	if _action_time < rising_windup:
 		if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
 			_start_parry()
@@ -696,6 +699,7 @@ func _process_rising_slash(delta: float) -> void:
 	visual.play(&"rising_sweep_air" if airborne else &"rising_sweep")
 	_sfx(sfx_dash_slash, 0.05)
 	GameFeel.shake(0.25)
+	GameFeel.flash(Color(0.75, 0.45, 1.0), 0.18, 0.12)
 	_squash = Vector2(0.7, 1.35)
 	_set_flash(Color(0.92, 0.82, 1.0), 0.8)
 	velocity = Vector2(0.0, rising_launch_velocity)
