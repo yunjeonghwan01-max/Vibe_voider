@@ -50,6 +50,7 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SL
 @export var dash_time: float = 0.15
 @export var dash_cooldown: float = 0.30
 @export var air_dashes: int = 1
+@export var dash_after_iframe: float = 0.15   # 대시가 끝난 뒤에도 이만큼 몰래 무적 (표시 없음)
 
 # ─────────────────────────── 전투 튜닝 ───────────────────────────
 @export_group("Combat")
@@ -176,6 +177,7 @@ var _dash_start_pos: Vector2 = Vector2.ZERO   # 마지막 대시를 시작한 �
 var _lightning_struck: bool = false
 var _rising_up: bool = false          # 승천 참격으로 튀어 오르는 중 (적 몸에 부딪히면 떨어진다)
 
+var _dash_iframe_t: float = 0.0       # 대시 후 숨은 무적 남은 시간
 var _iframe_t: float = 0.0            # 피격 무적 남은 시간 (깜빡임 표시용 — 실제 무적은 Hurtbox가 처리)
 var _squash: Vector2 = Vector2.ONE   # 스쿼시&스트레치
 var _attack_hitbox_base_pos: Vector2
@@ -285,6 +287,11 @@ func _tick_timers(delta: float) -> void:
 	_dash_cd = maxf(_dash_cd - delta, 0.0)
 	_parry_cd = maxf(_parry_cd - delta, 0.0)
 	_dash_slash_window = maxf(_dash_slash_window - delta, 0.0)
+	if _dash_iframe_t > 0.0:
+		_dash_iframe_t -= delta
+		# 반격/궁극기/사망처럼 무적을 스스로 관리하는 동작 중이면 건드리지 않는다
+		if _dash_iframe_t <= 0.0 and action not in [Action.DASH, Action.PARRY, Action.ULTIMATE, Action.DEAD]:
+			hurtbox.invincible = false
 	if _rising_up and (velocity.y >= 0.0 or is_on_floor()):
 		_rising_up = false
 	if _combo_timer > 0.0:
@@ -463,7 +470,7 @@ func _process_dash(delta: float) -> void:
 func _end_dash() -> void:
 	action = Action.NONE
 	_dash_slash_queued = false
-	hurtbox.invincible = false
+	_dash_iframe_t = dash_after_iframe   # 무적은 잠깐 더 유지 — _tick_timers가 푼다
 	trail.visible = false
 	velocity.x *= 0.5
 	visual.play(&"locomotion")
