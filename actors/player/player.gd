@@ -103,6 +103,9 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SL
 @export var ult_charge_on_damaged: float = 8.0
 @export var ult_windup: float = 0.14           # 검을 크게 치켜들었다가 내려 베는 순간 발사
 @export var ult_time: float = 0.5
+@export var ult_body_damage: int = 20          # 반달 참격 몸통 (평타 1타의 2배)
+@export var ult_burst_damage: int = 40         # 반달 참격 폭발 (평타 1타의 4배)
+@export var ult_max_distance: float = 1500.0
 @export var moon_slash_scene: PackedScene
 
 @export_group("Scenes")
@@ -1047,6 +1050,9 @@ func _fire_moon_slash() -> void:
 	var m := moon_slash_scene.instantiate() as MoonSlash
 	m.source = self
 	m.direction = facing
+	m.body_damage = ult_body_damage
+	m.burst_damage = ult_burst_damage
+	m.max_distance = ult_max_distance
 	_fx_parent().add_child(m)
 	m.global_position = global_position + Vector2(facing * 20.0, -8.0)
 
