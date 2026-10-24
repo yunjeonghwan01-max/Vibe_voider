@@ -74,7 +74,7 @@ Godot 엔진의 실제 제약이 이 문서와 충돌하면 **엔진 제약이 �
 
 - 같은 기능의 Scene과 Script는 **같은 basename**: `player.tscn` + `player.gd`. (`X.tscn.gd` 형식은 쓰지 않는다)
 - 파일/폴더명은 `snake_case`.
-- 조작 가능한 수치가 있는 객체 씬은 같은 폴더에 수치표 `<씬>_tuning.md`를 둔다 (규칙은 `AGENTS.md`의 Tuning Sheets).
+- 조작 가능한 수치가 있는 객체 씬은 같은 폴더에 수치 파일 `<씬>_tuning.cfg`를 둔다. 이 파일이 수치의 단일 출처다 (규칙은 `AGENTS.md`의 Tuning Files).
 - `.tscn`, `.gd`, `.tres`는 같은 기능이면 같은 기능 폴더에 둔다.
 - `.uid` 파일은 Godot이 관리한다. 스크립트를 옮길 때는 `.uid`도 함께 옮기고, 손으로 편집하지 않는다.
 - 이미지를 옮길 때는 `.import`도 함께 옮긴다 (UID 유지). Asset 파일명 자체는 불필요하게 바꾸지 않는다.

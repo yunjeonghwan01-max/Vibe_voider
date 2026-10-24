@@ -64,6 +64,10 @@ var _spikes: Array[Vector4] = []                            # 옆 가시 (높이
 var _cracks: Array[PackedVector2Array] = []                 # 기둥 속 균열선 (0..1 정규 좌표)
 
 
+func _enter_tree() -> void:
+	Tuning.apply(self)   # 같은 폴더의 <씬>_tuning.cfg — 자식 _ready()보다 먼저
+
+
 func _ready() -> void:
 	for hb in [body_hitbox, burst_hitbox]:
 		hb.source = source

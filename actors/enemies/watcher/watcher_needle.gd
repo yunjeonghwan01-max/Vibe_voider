@@ -23,6 +23,10 @@ var _t: float = 0.0
 var _dead: bool = false
 
 
+func _enter_tree() -> void:
+	Tuning.apply(self)   # 같은 폴더의 <씬>_tuning.cfg — 자식 _ready()보다 먼저
+
+
 func _ready() -> void:
 	rotation = direction.angle()
 	hitbox.source = source

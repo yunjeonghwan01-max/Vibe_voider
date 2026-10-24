@@ -37,6 +37,10 @@ var _die_t: float = 0.0
 var _pulse: float = 0.0              # 명중 순간 구체가 부풀었다 돌아온다
 
 
+func _enter_tree() -> void:
+	Tuning.apply(self)   # 같은 폴더의 <씬>_tuning.cfg — 자식 _ready()보다 먼저
+
+
 func _ready() -> void:
 	hitbox.source = source
 	hitbox.apply_on_contact = false

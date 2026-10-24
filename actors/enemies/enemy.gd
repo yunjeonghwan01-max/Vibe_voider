@@ -71,6 +71,10 @@ var _air_t: float = 0.0
 var _contact_area: Area2D = null
 
 
+func _enter_tree() -> void:
+	Tuning.apply(self)   # 같은 폴더의 <씬>_tuning.cfg — 자식 _ready()보다 먼저
+
+
 func _ready() -> void:
 	hurtbox.health = health          # 씬의 NodePath 직렬화에 의존하지 않고 코드로 확실히 연결
 	hurtbox.hit_received.connect(_on_hit_received)

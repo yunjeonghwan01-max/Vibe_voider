@@ -64,9 +64,11 @@ or resources, read `docs/structure.md`.
 
 Communicate with the user in Korean. Keep code, identifiers, and technical terminology in English.
 
-## Tuning Sheets
+## Tuning Files
 
-Every object scene with player-facing tunable values (player, each enemy/boss) has a Korean tuning sheet next to it: `<scene>_tuning.md` in the same folder as `<scene>.tscn` (e.g. `actors/enemies/grunt/grunt_tuning.md`). It lists HP, damage, cooldowns, resources (ultimate gauge, etc.), and key timings, with each value's location. Values of sub-scenes owned by the object (abilities, projectiles) go in the owner's sheet.
-- Whenever you change any such value (in `.gd` or `.tscn`), update the matching sheet in the same change. Record the effective value (`.tscn` overrides win over script defaults).
-- When adding a new object scene with tunable values, create its sheet next to it. When removing or moving the scene, remove or move its sheet with it.
-- When the human asks to change a number by name ("보스 체력 올려"), use the sheet to find it.
+Player-facing tunable values (HP, damage, cooldowns, resources such as the ultimate gauge, key timings) live in one tuning file per object scene: `<scene>_tuning.cfg` next to `<scene>.tscn` (e.g. `actors/enemies/grunt/grunt_tuning.cfg`). It is the **single source of truth**: the scene root calls `Tuning.apply(self)` (`core/data/tuning.gd`) in `_enter_tree()`, which overwrites node properties before any child `_ready()`. File values win over `.gd` defaults and `.tscn` overrides.
+- Format: Godot `ConfigFile`. Section = node path from the scene root (`[.]` = root, `[Combat/Health]`), key = property name. Comments (`;`) are in Korean so the human can read and edit the file directly.
+- To change a tunable value, edit the tuning file — not the `.gd` default or the `.tscn`. Unknown nodes/properties log a `[Tuning]` warning; check for it after edits.
+- When adding a tunable value or a new object scene, add it to (or create) the tuning file and hook `Tuning.apply(self)`. When moving or removing a scene, move or remove its tuning file with it.
+- When the human asks to change a number by name ("보스 체력 올려"), find it in the tuning file.
+- When an export preset is created, include `*_tuning.cfg` in its non-resource export filter, or the values will be missing from builds.

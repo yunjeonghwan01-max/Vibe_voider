@@ -174,6 +174,10 @@ var _flash_amount: float = 0.0
 var _flash_color: Color = Color.WHITE
 
 
+func _enter_tree() -> void:
+	Tuning.apply(self)   # 같은 폴더의 <씬>_tuning.cfg — 자식 _ready()보다 먼저
+
+
 func _ready() -> void:
 	_spawn_position = global_position
 	hurtbox.health = health          # 씬의 NodePath 직렬화에 의존하지 않고 코드로 확실히 연결
