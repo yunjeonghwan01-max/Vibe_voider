@@ -3,6 +3,7 @@
 | 항목 | 값 | 위치 |
 |---|---|---|
 | 최대 체력 | 40 | `Combat/Health.max_hp` (tscn) |
+| 접촉 피해 / 넉백 | 6 / 220 | `contact_damage` / `contact_knockback` (enemy.gd 기본) |
 | 이동 속도 | 190 | `move_speed` (tscn) |
 | 넉백 저항 | 0.3 | `knockback_resist` (tscn) |
 | 유지 거리 / 높이 | 300 / 180 | `hover_distance` / `hover_height` |

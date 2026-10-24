@@ -894,6 +894,11 @@ func _die_dissolve() -> void:
 	tw.chain().tween_callback(queue_free)
 
 
+## 순간이동으로 사라져 있거나 반격당해 쓰러진 동안에는 닿아도 아프지 않다.
+func _can_contact() -> bool:
+	return _atk not in [Atk.BLINK, Atk.CRASH, Atk.COUNTERED]
+
+
 # ─────────────────────────── 연출 ───────────────────────────
 func _heavy_land(strength: float) -> void:
 	velocity.x = 0.0

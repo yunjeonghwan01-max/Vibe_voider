@@ -35,6 +35,10 @@ const MAX_AIRBORNE := 1.4
 @export var knockback_resist: float = 0.0    # 0 = 넉백 그대로, 1 = 완전 저항
 @export var spawn_time: float = 0.6          # 등장 연출 동안은 공격하지 않고 맞지도 않는다
 
+@export_group("Contact")
+@export var contact_damage: int = 6          # 몸에 닿으면 주는 피해 (플레이어 피격 무적 동안은 다시 안 들어간다)
+@export var contact_knockback: float = 220.0
+
 @export_group("Glint")
 @export var glint_duration: float = 0.4      # 반격 가능한 반짝임 시간
 
@@ -64,6 +68,7 @@ var _flash_amount: float = 0.0
 var _flash_col: Color = Color.WHITE
 var _airborne: bool = false
 var _air_t: float = 0.0
+var _contact_area: Area2D = null
 
 
 func _ready() -> void:
@@ -73,6 +78,7 @@ func _ready() -> void:
 	if attack_hitbox != null:
 		attack_hitbox.source = self
 		attack_hitbox.monitoring = false
+	_build_contact_area()
 	_find_target()
 	facing = dir_to_target()
 	_on_ready()
@@ -118,6 +124,7 @@ func _physics_process(delta: float) -> void:
 				_on_stagger_end()
 		_:
 			_enemy_ai(delta)
+			_apply_contact_damage()
 			_apply_gravity(delta)
 
 	move_and_slide()
@@ -421,3 +428,43 @@ func _burst(color: Color, count: int, length: float, lifetime: float, ring: bool
 	s.burst(color, count, 360.0, 0.0, length, lifetime)
 	if ring:
 		s.with_ring(color, length * 1.3)
+
+
+# ─────────────────────────── 접촉 피해 ───────────────────────────
+## 몸통 판정과 같은 모양의 감지 영역. 공격 판정(layer 7)이 아니라서 반격 대상이 되지 않는다.
+func _build_contact_area() -> void:
+	if contact_damage <= 0:
+		return
+	var src := get_node_or_null("BodyCollision") as CollisionShape2D
+	if src == null or src.shape == null:
+		return
+	_contact_area = Area2D.new()
+	_contact_area.name = "ContactArea"
+	_contact_area.collision_layer = 0
+	_contact_area.collision_mask = CollisionLayers.PLAYER_HURTBOX
+	_contact_area.monitorable = false
+	var cs := CollisionShape2D.new()
+	cs.shape = src.shape
+	cs.position = src.position
+	cs.rotation = src.rotation
+	_contact_area.add_child(cs)
+	$Combat.add_child(_contact_area)
+
+
+## 적이 스스로 움직이는 동안(ACTIVE)만 — 등장·피격 경직·반격당함·사망 중에는 닿아도 아프지 않다.
+func _apply_contact_damage() -> void:
+	if _contact_area == null or state != State.ACTIVE or not _can_contact():
+		return
+	for area in _contact_area.get_overlapping_areas():
+		var hb := area as HurtboxComponent
+		if hb == null:
+			continue
+		var dir := signf(hb.global_position.x - global_position.x)
+		if dir == 0.0:
+			dir = facing
+		hb.receive_hit(contact_damage, self, Vector2(dir * contact_knockback, -contact_knockback * 0.6))
+
+
+## 하위 클래스 훅: 특정 동작 중(사라져 있을 때 등) 접촉 피해를 끈다.
+func _can_contact() -> bool:
+	return true

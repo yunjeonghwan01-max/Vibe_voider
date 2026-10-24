@@ -3,6 +3,7 @@
 | 항목 | 값 | 위치 |
 |---|---|---|
 | 최대 체력 | 1800 | `Combat/Health.max_hp` (tscn) |
+| 접촉 피해 / 넉백 | 12 / 320 | `contact_damage` / `contact_knockback` (tscn) |
 | 이동 속도 | 110 | `move_speed` (tscn) |
 | 넉백 저항 | 0.8 | `knockback_resist` (tscn) |
 | 반격당한 경직 | 1.3 | `parry_stagger_time` (tscn) |
