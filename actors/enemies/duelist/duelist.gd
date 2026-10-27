@@ -204,7 +204,7 @@ func _animate(delta: float) -> void:
 	var target := 35.0
 	var snap := false
 	match state:
-		State.HITSTUN:
+		State.HITSTUN, State.CARRIED:
 			frame_i = Frame.STAGGER
 			target = 70.0
 		State.STAGGER:

@@ -235,8 +235,12 @@ Player (CharacterBody2D)                       actors/player/player.gd
 │   ├── AttackHitbox(+CollisionShape2D)        콤보/궁극기 판정 (code로 on/off·크기·데미지)
 │   ├── ParryBox (Area2D, 항상 monitoring)      반격 키를 누른 순간 반짝이는 적 Hitbox를 읽는다
 │   ├── VoidOrb (Node2D, VoidOrbAbility)        스킬(E) 장풍: 쿨다운 + 구체 스폰 (abilities/void_orb/)
-│   └── DashSlash (Node2D, DashSlashAbility)    대시+E 대시 참격: 쿨다운 + Hitbox(긴 사각형) + 궤적 (abilities/dash_slash/)
-│       └── Hitbox(+CollisionShape2D)
+│   ├── DashSlash (Node2D, DashSlashAbility)    대시+E 대시 참격: 쿨다운 + Hitbox(긴 사각형) + 궤적 (abilities/dash_slash/)
+│   │   └── Hitbox(+CollisionShape2D)
+│   └── DrillRise (Node2D, DrillRiseAbility)    위+E 드릴 상승: 쿨다운 + 다단 Hitbox + 대상 분류 Sensor + 드릴 이펙트 (abilities/drill_rise/)
+│       ├── Hitbox(+CollisionShape2D)           apply_on_contact = false, 상승 진행도에 맞춘 틱
+│       ├── Sensor(+CollisionShape2D)           mask = enemy_body — 몸체를 감지해 그룹으로 분류
+│       └── Effect (Node2D, DrillRiseEffect)    몸을 감싸는 보라·흰빛 소용돌이 (_draw)
 └── Audio (AudioStreamPlayer2D들)
 
 Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/
@@ -266,6 +270,12 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/
   - `dash_slash_effect.gd/.tscn`: `_draw`로 그리는 수평 칼빛 (스폰물이라 기술 폴더에 둔다).
   - 입력 규칙: 대시 중 E는 장풍이 아니라 대시 참격 예약이다. E를 먼저 누르고 장풍이 나가기 전(0.06초)에 대시를 누르면 동시 입력으로 보고 대시 참격으로 바꾼다.
   - 유예 시간(코요테 타임식): 대시를 끝까지 탄 뒤 `dash_slash_grace`(0.12초) 안에 누른 E도 대시 참격이다. 그 뒤의 E는 장풍.
+- 세 번째 스킬 **드릴 상승**(`drill_rise/`): 위(W/↑)를 누른 채 E → 몸이 회전 드릴에 잠겨 `drill_rise_height`만큼 솟구친다. 쿨다운 1초.
+  - `drill_rise_ability.gd` (`Combat/DrillRise`): 쿨다운·틱 데미지·대상 분류·운반·이펙트. 자세(웅크림 → 상승 → 마무리, 캔슬)는 `player.gd`의 `Action.DRILL`(`DrillPhase`).
+  - 데미지: `tick_count`번으로 나눠 매번 `receive_hit` (합 = `total_damage`, 평타 1타의 2배). 틱은 상승 진행도에 맞춰 터지므로 속도/높이를 바꿔도 총량은 같다.
+  - 대상 분류는 **그룹(태그)** 으로 한다: `field_mob` 그룹(현재 Grunt·Duelist, 각 `.tscn` 루트에 지정)은 `Enemy.begin_carry()`로 드릴에 휩쓸려 끝까지 함께 올라가고 풀려나면 위로 튕긴 뒤 떨어진다. 그 외(앞으로 추가될 보스 등)는 붙잡지 않고 드릴과 겹친 틱만 맞는다.
+  - `Enemy`의 `State.CARRIED`: 위치를 운반자가 정하고(move_and_slide로 벽/천장 충돌 유지), 피격은 번쩍임·찌그러짐만 한다.
+- 입력: `player_move_up`에 W 추가 (W는 점프이기도 하다 — W를 누른 채 E면 드릴이 점프보다 우선한다).
 
 ---
 

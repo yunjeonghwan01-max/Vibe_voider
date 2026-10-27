@@ -20,6 +20,7 @@ const KEYS := {
 	&"cast": [[0.0, -70.0], [0.05, -95.0], [0.1, -8.0], [0.26, 6.0]],
 	&"dash_slash": [[0.0, 168.0], [0.03, 176.0], [0.12, -4.0], [0.28, 8.0]],
 	&"dash": [[0.0, 120.0], [0.06, 172.0]],
+	&"drill": [[0.0, 30.0], [0.08, -95.0]],
 	&"hurt": [[0.0, 60.0], [0.1, 100.0]],
 	&"dead": [[0.0, 90.0], [0.3, 115.0]],
 }
@@ -90,6 +91,11 @@ func tick(delta: float, vel: Vector2, on_floor: bool, run_speed: float) -> void:
 			target = -90.0 + 1080.0 * (1.0 - pow(1.0 - clampf(_t / 0.4, 0.0, 1.0), 2.0))
 			snap = true
 			frame_i = Frame.DASH
+		&"drill":
+			# 드릴 상승: 웅크렸다가 검을 머리 위로 곧게 세우고 솟구친다 (대부분 이펙트에 가려진다)
+			target = _keyed(KEYS[anim], _t)
+			snap = true
+			frame_i = Frame.FALL if _t < 0.08 else Frame.JUMP
 		&"dash":
 			target = _keyed(KEYS[anim], _t)
 			snap = true

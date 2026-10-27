@@ -15,6 +15,8 @@
 [ext_resource type="PackedScene" path="res://actors/player/abilities/void_orb/void_orb_projectile.tscn" id="10_orb_proj"]
 [ext_resource type="Script" uid="uid://ddhui8cfgt60e" path="res://actors/player/abilities/dash_slash/dash_slash_ability.gd" id="11_ds_ability"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/dash_slash/dash_slash_effect.tscn" id="12_ds_fx"]
+[ext_resource type="Script" path="res://actors/player/abilities/drill_rise/drill_rise_ability.gd" id="13_drill_ability"]
+[ext_resource type="Script" path="res://actors/player/abilities/drill_rise/drill_rise_effect.gd" id="14_drill_fx"]
 [ext_resource type="AudioStream" uid="uid://cnlltvsiboews" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
 [ext_resource type="AudioStream" uid="uid://dcixlbk3lyuvs" path="res://assets/temporary/audio/dash_slash.wav" id="a_dash_slash"]
 [ext_resource type="AudioStream" uid="uid://f51u2c8am6r2" path="res://assets/temporary/audio/player_death.wav" id="a_death"]
@@ -54,6 +56,12 @@ radius = 72.0
 
 [sub_resource type="RectangleShape2D" id="Rect_dash_slash"]
 size = Vector2(176, 46)
+
+[sub_resource type="RectangleShape2D" id="Rect_drill_hit"]
+size = Vector2(84, 144)
+
+[sub_resource type="RectangleShape2D" id="Rect_drill_sensor"]
+size = Vector2(76, 112)
 
 [node name="Player" type="CharacterBody2D" unique_id=589987289]
 z_index = 2
@@ -151,6 +159,34 @@ damage = 15
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/DashSlash/Hitbox" unique_id=1333878218]
 shape = SubResource("Rect_dash_slash")
+
+[node name="DrillRise" type="Node2D" parent="Combat"]
+script = ExtResource("13_drill_ability")
+
+[node name="Hitbox" type="Area2D" parent="Combat/DrillRise"]
+position = Vector2(0, -42)
+collision_layer = 32
+collision_mask = 16
+monitoring = false
+script = ExtResource("5_hit")
+apply_on_contact = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/DrillRise/Hitbox"]
+shape = SubResource("Rect_drill_hit")
+
+[node name="Sensor" type="Area2D" parent="Combat/DrillRise"]
+position = Vector2(0, -30)
+collision_layer = 0
+collision_mask = 4
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/DrillRise/Sensor"]
+shape = SubResource("Rect_drill_sensor")
+
+[node name="Effect" type="Node2D" parent="Combat/DrillRise"]
+z_index = 1
+script = ExtResource("14_drill_fx")
 
 [node name="Audio" type="Node2D" parent="." unique_id=1525423985]
 

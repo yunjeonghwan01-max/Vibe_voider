@@ -122,7 +122,7 @@ func _on_stagger_end() -> void:
 
 func _animate(_delta: float) -> void:
 	match state:
-		State.HITSTUN, State.STAGGER:
+		State.HITSTUN, State.STAGGER, State.CARRIED:
 			body.frame = Frame.HURT
 		State.SPAWNING:
 			body.frame = Frame.IDLE_A

@@ -4,7 +4,7 @@ extends CharacterBody2D
 ## 떠돌이 검사(검은 고양이). 빠르고 반응 좋은 이동 + 근접 전투의 핵심.
 ##
 ## 이동:  달리기(가감속) / 점프(코요테 타임 + 점프 버퍼 + 가변 높이) / 대시(무적·잔상)
-## 전투:  3연속 참격 콤보 / 반격(패링) / 스킬(E: 장풍, 대시+E: 대시 참격) / 궁극기(전투로 충전, 수동 발동)
+## 전투:  3연속 참격 콤보 / 반격(패링) / 스킬(E: 장풍, 대시+E: 대시 참격, 위+E: 드릴 상승) / 궁극기(전투로 충전, 수동 발동)
 ##
 ## 반격 규칙: 적이 공격 직전 0.4초 동안 금빛으로 "반짝"인다. 그 순간 반격 키를 눌러야만 성공한다.
 ##   - 누른 순간 ParryBox 안에 반짝이는 적의 공격 판정이 있으면 성공 → 적 경직, 공격 취소.
@@ -18,7 +18,8 @@ signal ultimate_changed(charge: float, max_charge: float)
 signal ultimate_ready_changed(is_ready: bool)
 signal died
 
-enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD }
+enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD, DRILL }
+enum DrillPhase { WINDUP, RISE, END }
 
 # ─────────────────────────── 이동 튜닝 ───────────────────────────
 @export_group("Movement")
@@ -71,6 +72,16 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD
 @export var dash_slash_active: float = 0.1
 @export var dash_slash_recovery: float = 0.15
 
+@export_group("Drill Rise")
+@export var drill_windup: float = 0.08          # 몸을 웅크리며 드릴이 맺히는 예비 동작 (제자리 체공)
+@export var drill_rise_speed: float = 1050.0    # 상승 속도 (px/초)
+@export var drill_rise_height: float = 300.0    # 시작 높이에서 이만큼 올라간다
+@export var drill_slowdown: float = 0.3         # 목표 높이의 마지막 이 비율 구간에서 감속해 부드럽게 멈춘다
+@export var drill_steer: float = 0.25           # 상승 중 좌우 조작 (달리기 속도 대비)
+@export var drill_exit_speed: float = 240.0     # 드릴이 풀린 뒤 조금 더 떠오르는 속도 → 자연스럽게 정점 후 낙하
+@export var drill_end_time: float = 0.14        # 드릴이 흩어지며 몸이 드러나는 마무리 (이후 자유 상태)
+@export var drill_body_alpha: float = 0.08      # 드릴에 잠긴 동안 몸의 불투명도
+
 @export_group("Ultimate")
 @export var ultimate_max: float = 100.0
 @export var ult_charge_on_parry: float = 34.0
@@ -94,6 +105,7 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, ULTIMATE, HURT, DEAD
 @onready var parry_box: Area2D = $Combat/ParryBox
 @onready var void_orb: VoidOrbAbility = $Combat/VoidOrb
 @onready var dash_slash: DashSlashAbility = $Combat/DashSlash
+@onready var drill: DrillRiseAbility = $Combat/DrillRise
 @onready var sfx_swing: Array[AudioStreamPlayer2D] = [
 	$Audio/Swing1 as AudioStreamPlayer2D, $Audio/Swing2 as AudioStreamPlayer2D, $Audio/Swing3 as AudioStreamPlayer2D]
 @onready var sfx_hit: AudioStreamPlayer2D = $Audio/Hit
@@ -132,6 +144,9 @@ var _parry_success: bool = false
 var _skill_fired: bool = false
 var _dash_slash_queued: bool = false   # 대시 중 E 입력 → 대시가 끝나면 대시 참격
 var _dash_slash_window: float = 0.0    # 대시 직후 대시 참격 유예 시간 (남은 초)
+var _drill_phase: int = DrillPhase.WINDUP
+var _drill_start_y: float = 0.0
+var _drill_ticks_hit: int = 0          # 이번 드릴에서 명중한 틱 수 (타격음 음높이 상승용)
 
 var _squash: Vector2 = Vector2.ONE   # 스쿼시&스트레치
 var _attack_hitbox_base_pos: Vector2
@@ -151,6 +166,7 @@ func _ready() -> void:
 	void_orb.hit_landed.connect(_on_skill_hit)
 	void_orb.ready_again.connect(_on_skill_ready)
 	dash_slash.hit_landed.connect(_on_dash_slash_landed)
+	drill.hit_landed.connect(_on_drill_hit)
 
 	attack_hitbox.source = self
 	attack_hitbox.monitoring = false
@@ -183,6 +199,8 @@ func _physics_process(delta: float) -> void:
 			_process_dash_slash(delta)
 		Action.ULTIMATE:
 			_process_ultimate(delta)
+		Action.DRILL:
+			_process_drill(delta)
 		Action.HURT:
 			_process_hurt(delta)
 		Action.DEAD:
@@ -216,13 +234,16 @@ func _tick_timers(delta: float) -> void:
 
 # ─────────────────────── 자유 상태(이동/입력) ───────────────────────
 func _process_free(delta: float) -> void:
-	# 액션 입력 우선순위: 궁극기 > 반격 > (대시+스킬 동시 = 대시 참격) > 스킬 > 대시 > 공격 > 점프
+	# 액션 입력 우선순위: 궁극기 > 반격 > (위+스킬 = 드릴 상승) > (대시+스킬 동시 = 대시 참격) > 스킬 > 대시 > 공격 > 점프
 	# (반격은 타이밍이 생명이라 다른 입력에 밀리지 않게 앞에 둔다)
 	if Input.is_action_just_pressed("player_ultimate") and is_ultimate_ready():
 		_start_ultimate()
 		return
 	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
 		_start_parry()
+		return
+	if _wants_drill():
+		_start_drill()
 		return
 	if Input.is_action_just_pressed("player_dash") and Input.is_action_just_pressed("player_skill") \
 			and _can_dash() and dash_slash.can_use():
@@ -408,7 +429,11 @@ func _process_attack(delta: float) -> void:
 		_end_attack()
 		_start_dash()
 		return
-	# 판정이 끝난 뒤(후딜)에는 장풍으로 이어 쏠 수 있다 — 베고 바로 쏘는 콤보
+	# 판정이 끝난 뒤(후딜)에는 스킬로 이어갈 수 있다 — 베고 바로 띄우거나(위+E) 쏘는(E) 콤보
+	if _action_time >= active_end and _wants_drill():
+		_end_attack()
+		_start_drill()
+		return
 	if _action_time >= active_end and Input.is_action_just_pressed("player_skill") and void_orb.can_cast():
 		_end_attack()
 		_start_skill()
@@ -610,6 +635,120 @@ func _on_dash_slash_landed(hurt: HurtboxComponent) -> void:
 			0.0 if facing > 0.0 else 180.0, 64.0)
 
 
+# ─────────────────────────── 스킬: 드릴 상승 ───────────────────────────
+func _wants_drill() -> bool:
+	return Input.is_action_just_pressed("player_skill") and Input.is_action_pressed("player_move_up") \
+			and drill.can_use()
+
+
+func _start_drill() -> void:
+	action = Action.DRILL
+	_drill_phase = DrillPhase.WINDUP
+	_action_time = 0.0
+	_drill_ticks_hit = 0
+	_drill_start_y = global_position.y
+	_dash_slash_window = 0.0
+	velocity = Vector2(velocity.x * 0.25, 0.0)   # 점프 중이어도 그 자리에 멈춰 힘을 모은다
+	hurtbox.invincible = true
+	_squash = Vector2(1.28, 0.74)                 # 웅크림 (예비 동작)
+	drill.begin(self, drill_windup)
+	visual.play(&"drill")
+	_set_flash(Color(0.8, 0.65, 1.0), 0.7)
+	_sfx(sfx_dash, 0.04)
+
+
+func _process_drill(delta: float) -> void:
+	_action_time += delta
+	match _drill_phase:
+		DrillPhase.WINDUP:
+			velocity.x = move_toward(velocity.x, 0.0, ground_friction * delta)
+			velocity.y = 0.0
+			if _action_time >= drill_windup:
+				_launch_drill()
+		DrillPhase.RISE:
+			var risen := _drill_start_y - global_position.y
+			var progress := clampf(risen / maxf(drill_rise_height, 1.0), 0.0, 1.0)
+			drill.advance(progress)
+			# 마지막 구간에서 감속 → 목표 높이에 부드럽게 도착
+			var slow := clampf((1.0 - progress) / maxf(drill_slowdown, 0.01), 0.35, 1.0)
+			velocity.y = -drill_rise_speed * slow
+			velocity.x = move_toward(velocity.x, _move_input() * run_speed * drill_steer, air_accel * delta)
+			var max_time := drill_rise_height / maxf(drill_rise_speed, 1.0) * 2.5 + 0.1   # 끼임 안전장치
+			if progress >= 1.0 or is_on_ceiling() or _action_time >= max_time:
+				_end_drill_rise()
+		DrillPhase.END:
+			_apply_horizontal(delta, _move_input(), true)
+			_apply_gravity_no_cut(delta)
+			# 마무리 중에도 다음 행동으로 바로 이어갈 수 있다 (공중 콤보)
+			if Input.is_action_just_pressed("player_attack"):
+				_finish_drill_state()
+				_start_attack(0)
+				return
+			if Input.is_action_just_pressed("player_dash") and _can_dash():
+				_finish_drill_state()
+				_start_dash()
+				return
+			if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+				_finish_drill_state()
+				_start_parry()
+				return
+			if _action_time >= drill_end_time:
+				_finish_drill_state()
+
+
+func _launch_drill() -> void:
+	_drill_phase = DrillPhase.RISE
+	_action_time = 0.0
+	velocity.y = -drill_rise_speed
+	_squash = Vector2(0.72, 1.34)                 # 튀어 오르며 길게 늘어난다
+	trail.visible = true
+	GameFeel.shake(0.18)
+	_sfx(sfx_dash_slash, 0.05)
+	_spawn_spark(global_position + Vector2(0.0, 30.0), Color(0.85, 0.7, 1.0, 1.0), 10, 120.0, 90.0, 46.0)
+
+
+func _end_drill_rise() -> void:
+	_drill_phase = DrillPhase.END
+	_action_time = 0.0
+	velocity.y = -drill_exit_speed
+	drill.finish(Vector2(velocity.x * 0.4, -drill_exit_speed * 1.15), drill_end_time)
+	hurtbox.invincible = false
+	trail.visible = false
+	_squash = Vector2(1.18, 0.86)
+	visual.play(&"locomotion")                    # 위로 떠오르는 점프 자세로 자연스럽게 이어진다
+	_spawn_spark(global_position + Vector2(0.0, -40.0), Color(0.9, 0.8, 1.0, 1.0), 12, 360.0, -90.0, 52.0)
+
+
+func _finish_drill_state() -> void:
+	action = Action.NONE
+
+
+## 드릴 직후 낙하 — 점프 키(W)를 떼도 남은 상승이 잘리지 않게 한다 (툭 끊기지 않고 정점을 그린다).
+func _apply_gravity_no_cut(delta: float) -> void:
+	if is_on_floor():
+		return
+	var g := gravity * (fall_gravity_mult if velocity.y > 0.0 else 1.0)
+	velocity.y = minf(velocity.y + g * delta, max_fall_speed)
+
+
+func _on_drill_hit(hurt: HurtboxComponent, last_tick: bool) -> void:
+	_drill_ticks_hit += 1
+	_add_ultimate(ult_charge_on_hit * 0.25)
+	if last_tick:
+		GameFeel.hit_stop(0.05)
+		GameFeel.shake(0.32)
+		_sfx(sfx_hit_heavy, 0.06)
+	else:
+		# 갈리는 소리: 틱마다 음높이가 조금씩 올라간다
+		GameFeel.shake(0.07)
+		sfx_hit.pitch_scale = 0.9 + 0.05 * _drill_ticks_hit + randf_range(-0.03, 0.03)
+		sfx_hit.play()
+	var col := Color(1.0, 0.95, 0.8, 1.0) if last_tick else Color(0.9, 0.78, 1.0, 1.0)
+	_spawn_spark(hurt.global_position + Vector2(randf_range(-10.0, 10.0), randf_range(-8.0, 8.0)), col,
+			10 if last_tick else 4, 360.0 if last_tick else 140.0, randf_range(0.0, 360.0),
+			52.0 if last_tick else 30.0)
+
+
 # ─────────────────────────── 반격(패링) ───────────────────────────
 func _start_parry() -> void:
 	action = Action.PARRY
@@ -768,6 +907,7 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	_action_time = 0.0
 	attack_hitbox.monitoring = false
 	dash_slash.set_active(false)
+	drill.cancel()
 	_dash_slash_queued = false
 	attack_shape.scale = Vector2.ONE
 	trail.visible = false
@@ -793,6 +933,7 @@ func _on_died() -> void:
 	action = Action.DEAD
 	attack_hitbox.monitoring = false
 	dash_slash.set_active(false)
+	drill.cancel()
 	_dash_slash_queued = false
 	attack_shape.scale = Vector2.ONE
 	hurtbox.invincible = true
@@ -857,6 +998,10 @@ func _update_visual(delta: float) -> void:
 		visual.position.y = lerp(visual.position.y, 0.0, 1.0 - exp(-14.0 * delta))
 
 	visual.scale = Vector2(facing * _squash.x, _squash.y)
+	# 드릴에 잠긴 동안 몸이 거의 보이지 않는다 (맺힐 때 빠르게 사라지고, 흩어질 때 다시 드러난다)
+	var in_drill := action == Action.DRILL and _drill_phase != DrillPhase.END
+	var body_alpha := drill_body_alpha if in_drill else 1.0
+	visual.modulate.a = lerpf(visual.modulate.a, body_alpha, 1.0 - exp(-(40.0 if in_drill else 22.0) * delta))
 	if action == Action.DEAD:
 		# 쓰러짐: 뒤로 넘어간다
 		visual.rotation = lerp(visual.rotation, -facing * 1.35, 1.0 - exp(-10.0 * delta))
