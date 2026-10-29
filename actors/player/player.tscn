@@ -21,6 +21,9 @@
 [ext_resource type="Script" path="res://actors/player/abilities/rising_slash/rising_slash_ability.gd" id="18_rising"]
 [ext_resource type="Script" path="res://actors/player/abilities/spin_rise/spin_rise_ability.gd" id="19_spin"]
 [ext_resource type="Script" path="res://actors/player/abilities/spin_rise/spin_rise_effect.gd" id="20_spin_fx"]
+[ext_resource type="Script" path="res://actors/player/abilities/dive/dive_ability.gd" id="21_dive"]
+[ext_resource type="PackedScene" path="res://actors/player/abilities/dive/dive_blast.tscn" id="22_dive_blast"]
+[ext_resource type="PackedScene" path="res://combat/effects/ground_impact/ground_impact.tscn" id="23_impact"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/haki/haki_burst.tscn" id="16_haki"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/moon_slash/moon_slash.tscn" id="17_moon"]
 [ext_resource type="AudioStream" uid="uid://cnlltvsiboews" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
@@ -70,6 +73,9 @@ size = Vector2(84, 144)
 
 [sub_resource type="RectangleShape2D" id="Rect_spin_sensor"]
 size = Vector2(76, 112)
+
+[sub_resource type="RectangleShape2D" id="Rect_dive_body"]
+size = Vector2(48, 70)
 
 [sub_resource type="RectangleShape2D" id="Rect_dash_slash"]
 size = Vector2(260, 50)
@@ -219,6 +225,20 @@ shape = SubResource("Rect_spin_sensor")
 [node name="Effect" type="Node2D" parent="Combat/SpinRise"]
 z_index = 1
 script = ExtResource("20_spin_fx")
+
+[node name="Dive" type="Node2D" parent="Combat"]
+script = ExtResource("21_dive")
+blast_scene = ExtResource("22_dive_blast")
+impact_scene = ExtResource("23_impact")
+
+[node name="Hitbox" type="Area2D" parent="Combat/Dive"]
+collision_layer = 32
+collision_mask = 16
+monitoring = false
+script = ExtResource("5_hit")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/Dive/Hitbox"]
+shape = SubResource("Rect_dive_body")
 
 [node name="Audio" type="Node2D" parent="." unique_id=1525423985]
 

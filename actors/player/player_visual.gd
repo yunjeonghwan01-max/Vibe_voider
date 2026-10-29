@@ -23,6 +23,8 @@ const KEYS := {
 	&"ult_cast": [[0.0, -120.0], [0.12, -178.0], [0.2, 40.0], [0.5, 28.0]],
 	&"dash": [[0.0, 120.0], [0.06, 172.0]],
 	&"spin_rise": [[0.0, 30.0], [0.1, -95.0]],
+	&"dive": [[0.0, 30.0], [0.1, -100.0], [0.22, -90.0]],
+	&"dive_land": [[0.0, 95.0], [0.2, 80.0]],
 	&"rising_crouch": [[0.0, 120.0], [0.15, 140.0]],
 	&"rising_sweep": [[0.0, 135.0], [0.12, 405.0]],
 	&"rising_sweep_air": [[0.0, 135.0], [0.12, 450.0]],
@@ -97,6 +99,16 @@ func tick(delta: float, vel: Vector2, on_floor: bool, run_speed: float) -> void:
 			target = _keyed(KEYS[anim], _t)
 			snap = true
 			frame_i = Frame.FALL if _t < 0.1 else Frame.JUMP
+		&"dive":
+			# 강하: 검을 머리 위로 세운다 — 몸이 뒤집히면 검끝이 땅을 향한다
+			target = _keyed(KEYS[anim], _t)
+			snap = true
+			frame_i = Frame.JUMP
+		&"dive_land":
+			# 땅에 꽂힌 자세: 웅크린 채 검을 아래로 박는다
+			target = _keyed(KEYS[anim], _t)
+			snap = true
+			frame_i = Frame.FALL
 		&"dash_slash":
 			# 대시 참격: 뒤로 끌던 검을 앞으로 수평에 가깝게 쓸어 벤다
 			target = _keyed(KEYS[anim], _t)

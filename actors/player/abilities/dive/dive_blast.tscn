@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://actors/player/abilities/dive/dive_blast.gd" id="1_blast"]
+[ext_resource type="Script" uid="uid://ccskgv0c6im1v" path="res://combat/components/hitbox/hitbox.gd" id="2_hit"]
+[ext_resource type="PackedScene" uid="uid://cgygv5hooem53" path="res://combat/effects/spark/spark.tscn" id="3_spark"]
+
+[sub_resource type="RectangleShape2D" id="Rect_blast"]
+size = Vector2(300, 150)
+
+[node name="DiveBlast" type="Node2D"]
+z_index = 3
+script = ExtResource("1_blast")
+spark_scene = ExtResource("3_spark")
+
+[node name="Hitbox" type="Area2D" parent="."]
+collision_layer = 32
+collision_mask = 16
+script = ExtResource("2_hit")
+apply_on_contact = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox"]
+shape = SubResource("Rect_blast")

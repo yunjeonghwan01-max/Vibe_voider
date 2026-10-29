@@ -26,8 +26,9 @@ signal ultimate_changed(charge: float, max_charge: float)
 signal ultimate_ready_changed(is_ready: bool)
 signal died
 
-enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SLASH, SPIN_RISE, ULTIMATE, HURT, DEAD }
+enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SLASH, SPIN_RISE, DIVE, ULTIMATE, HURT, DEAD }
 enum SpinPhase { WINDUP, RISE, END }
+enum DivePhase { HOP, HANG, FALL, LAND }
 
 # ─────────────────────────── 이동 튜닝 ───────────────────────────
 @export_group("Movement")
@@ -77,9 +78,9 @@ enum SpinPhase { WINDUP, RISE, END }
 @export_group("Skill Slots")
 ## 입력 슬롯마다 장착한 스킬 이름. 스킬 키(E)를 누를 때 아래(S/↓) > 위(W/↑) > 기본 순으로 슬롯을 고른다.
 ## 대쉬 슬롯은 대쉬 중(과 직후 유예 시간)의 E — 방향키보다 우선한다. "none" = 비어 있음.
-@export_enum("none", "void_orb", "spin_rise", "lightning", "rising_slash") var slot_neutral: String = "void_orb"
-@export_enum("none", "void_orb", "spin_rise", "lightning", "rising_slash") var slot_up: String = "spin_rise"
-@export_enum("none", "void_orb", "spin_rise", "lightning", "rising_slash") var slot_down: String = "rising_slash"
+@export_enum("none", "void_orb", "spin_rise", "dive", "lightning", "rising_slash") var slot_neutral: String = "void_orb"
+@export_enum("none", "void_orb", "spin_rise", "dive", "lightning", "rising_slash") var slot_up: String = "spin_rise"
+@export_enum("none", "void_orb", "spin_rise", "dive", "lightning", "rising_slash") var slot_down: String = "dive"
 @export_enum("none", "dash_slash") var slot_dash: String = "dash_slash"
 @export_enum("none", "moon_slash") var slot_ultimate: String = "moon_slash"
 
@@ -120,6 +121,15 @@ enum SpinPhase { WINDUP, RISE, END }
 @export var spin_body_alpha: float = 0.08       # 회오리에 잠긴 동안 몸의 불투명도
 @export var spin_invincible: bool = true        # 예비 동작·상승 중 무적 (실험값)
 
+@export_group("Dive")
+@export var dive_hop_speed: float = 420.0       # 발동하면 이 속도로 살짝 떠오른다
+@export var dive_hop_time: float = 0.1
+@export var dive_hang_time: float = 0.12        # 공중에 멈춘 듯 자세를 고정하는 시간
+@export var dive_speed: float = 1700.0
+@export var dive_angle: float = 20.0            # 급강하 시작 순간 좌우 입력이 있으면 수직에서 이만큼 기운다 (도)
+@export var dive_max_time: float = 2.0          # 바닥이 없을 때 안전장치
+@export var dive_counter_cancel: bool = true    # 떠오름·체공·급강하 중 반격으로 끊기 (실험값)
+
 @export_group("Ultimate")
 @export var ultimate_max: float = 100.0
 @export var ult_charge_on_parry: float = 34.0
@@ -151,6 +161,7 @@ enum SpinPhase { WINDUP, RISE, END }
 @onready var lightning: LightningAbility = $Combat/Lightning
 @onready var rising_slash: RisingSlashAbility = $Combat/RisingSlash
 @onready var spin_rise: SpinRiseAbility = $Combat/SpinRise
+@onready var dive: DiveAbility = $Combat/Dive
 @onready var sfx_swing: Array[AudioStreamPlayer2D] = [
 	$Audio/Swing1 as AudioStreamPlayer2D, $Audio/Swing2 as AudioStreamPlayer2D, $Audio/Swing3 as AudioStreamPlayer2D]
 @onready var sfx_hit: AudioStreamPlayer2D = $Audio/Hit
@@ -203,6 +214,9 @@ var _rising_up: bool = false          # 승천 참격으로 튀어 오르는 중
 var _spin_phase: int = SpinPhase.WINDUP
 var _spin_start: Vector2 = Vector2.ZERO
 var _spin_ticks_hit: int = 0          # 이번 회전 상승에서 명중한 틱 수 (타격음 음높이 상승용)
+var _dive_phase: int = DivePhase.HOP
+var _dive_start_y: float = 0.0        # 강하를 시작한 높이 — 떨어진 높이만큼 착지 피해가 커진다
+var _dive_tilt: float = 0.0           # 급강하 각도 (수직 기준 라디안, + = 오른쪽)
 
 var _dash_iframe_t: float = 0.0       # 대시 후 숨은 무적 남은 시간
 var _iframe_t: float = 0.0            # 피격 무적 남은 시간 (깜빡임 표시용 — 실제 무적은 Hurtbox가 처리)
@@ -231,6 +245,7 @@ func _ready() -> void:
 	lightning.hit_landed.connect(_on_lightning_hit)
 	rising_slash.hit_landed.connect(_on_lightning_hit)
 	spin_rise.hit_landed.connect(_on_spin_rise_hit)
+	dive.hit_landed.connect(_on_dive_hit)
 
 	attack_hitbox.source = self
 	attack_hitbox.monitoring = false
@@ -287,6 +302,8 @@ func _physics_process(delta: float) -> void:
 			_process_rising_slash(delta)
 		Action.SPIN_RISE:
 			_process_spin_rise(delta)
+		Action.DIVE:
+			_process_dive(delta)
 		Action.DASH_SLASH:
 			_process_dash_slash(delta)
 		Action.ULTIMATE:
@@ -382,6 +399,8 @@ func _can_cast_skill(skill: String) -> bool:
 			return void_orb.can_cast()
 		"spin_rise":
 			return spin_rise.can_use()
+		"dive":
+			return dive.can_use()
 		"lightning":
 			return lightning.can_cast()
 		"rising_slash":
@@ -395,6 +414,8 @@ func _cast_skill(skill: String) -> void:
 			_start_skill()
 		"spin_rise":
 			_start_spin_rise()
+		"dive":
+			_start_dive()
 		"lightning":
 			_start_lightning()
 		"rising_slash":
@@ -917,6 +938,108 @@ func _on_spin_rise_hit(hurt: HurtboxComponent, last_tick: bool) -> void:
 			52.0 if last_tick else 30.0)
 
 
+# ─────────────────────────── 스킬: 강하 ───────────────────────────
+## 떠오름 → 체공(자세 고정, 좌우 입력으로 각도 선택) → 머리부터 급강하(방향 고정) → 착지(불꽃이 솟을 때까지 행동 불가).
+## 강하 내내 맞아도 피해만 받고 멈추지 않는다 (_on_hit_received). 떠오름·체공·급강하는 반격으로 끊을 수 있다(dive_counter_cancel).
+func _start_dive() -> void:
+	action = Action.DIVE
+	_dive_phase = DivePhase.HOP
+	_action_time = 0.0
+	_dive_start_y = global_position.y
+	_dive_tilt = 0.0
+	_dash_slash_window = 0.0
+	dive.start_cooldown()
+	velocity = Vector2(0.0, -dive_hop_speed)
+	_squash = Vector2(0.8, 1.22)
+	visual.play(&"dive")
+	_set_flash(Color(0.75, 0.45, 1.0), 0.6)
+	_sfx(sfx_jump, 0.05)
+
+
+func _process_dive(delta: float) -> void:
+	_action_time += delta
+	if dive_counter_cancel and _dive_phase != DivePhase.LAND \
+			and Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+		_end_dive()
+		_start_parry()
+		return
+	match _dive_phase:
+		DivePhase.HOP:
+			velocity.x = move_toward(velocity.x, 0.0, air_friction * 4.0 * delta)
+			velocity.y = move_toward(velocity.y, 0.0, dive_hop_speed / maxf(dive_hop_time, 0.01) * delta)
+			if _action_time >= dive_hop_time:
+				_dive_phase = DivePhase.HANG
+				_action_time = 0.0
+		DivePhase.HANG:
+			velocity = Vector2.ZERO
+			if _action_time >= dive_hang_time:
+				_launch_dive()
+		DivePhase.FALL:
+			if is_on_floor():
+				_land_dive()
+				return
+			velocity = Vector2(sin(_dive_tilt), cos(_dive_tilt)) * dive_speed
+			if is_on_wall():
+				velocity.x = 0.0              # 벽에 닿으면 벽을 따라 곧게 떨어진다
+			if fmod(_action_time, 0.03) < delta:
+				_spawn_afterimage()
+			if _action_time >= dive_max_time:  # 바닥 없는 곳 안전장치
+				_end_dive()
+		DivePhase.LAND:
+			velocity.x = move_toward(velocity.x, 0.0, ground_friction * delta)
+			_apply_gravity(delta)
+			if _action_time >= dive.flame_delay:
+				_end_dive()
+
+
+## 급강하 시작 — 이 순간의 좌우 입력으로 각도가 정해지고 이후엔 바꿀 수 없다.
+func _launch_dive() -> void:
+	_dive_phase = DivePhase.FALL
+	_action_time = 0.0
+	var dir := _move_input()
+	if absf(dir) > 0.01:
+		facing = signf(dir)
+		_dive_tilt = signf(dir) * deg_to_rad(dive_angle)
+	velocity = Vector2(sin(_dive_tilt), cos(_dive_tilt)) * dive_speed
+	dive.set_body_active(self, true, velocity.normalized())
+	trail.visible = true
+	_squash = Vector2(0.7, 1.4)
+	GameFeel.shake(0.15)
+	_sfx(sfx_dash, 0.05)
+	_spawn_afterimage()
+
+
+func _land_dive() -> void:
+	_dive_phase = DivePhase.LAND
+	_action_time = 0.0
+	dive.set_body_active(self, false)
+	trail.visible = false
+	var feet := global_position + Vector2(0.0, 27.0)
+	var k := dive.land(self, feet, global_position.y - _dive_start_y)
+	velocity = Vector2.ZERO
+	_squash = Vector2(1.45, 0.62)
+	visual.rotation = 0.0                 # 꽂히는 순간 몸을 바로 세운다
+	visual.play(&"dive_land")
+	GameFeel.hit_stop(0.05 + 0.04 * k)
+	GameFeel.shake(0.45 + 0.3 * k)
+	GameFeel.flash(Color(0.55, 0.25, 0.9), 0.18 + 0.12 * k, 0.12)
+	_sfx(sfx_hit_heavy, 0.05)
+	_sfx(sfx_land, 0.05)
+	_set_flash(Color(0.85, 0.7, 1.0), 0.9)
+
+
+func _end_dive() -> void:
+	dive.set_body_active(self, false)
+	trail.visible = false
+	action = Action.NONE
+	visual.play(&"locomotion")
+
+
+func _on_dive_hit(hurt: HurtboxComponent) -> void:
+	_add_ultimate(ult_charge_on_hit)
+	_spawn_spark(hurt.global_position, Color(0.85, 0.65, 1.0, 1.0), 6, 120.0, -90.0, 40.0)
+
+
 # ─────────────────────────── 스킬: 대시 참격 ───────────────────────────
 func _queue_dash_slash() -> void:
 	if _dash_slash_queued or not _dash_slot_ready():
@@ -1269,6 +1392,9 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 		return                          # 치명타는 _on_died가 처리
 	_add_ultimate(ult_charge_on_damaged)
 	_iframe_t = hurtbox.invincibility_duration
+	if action == Action.DIVE:
+		_on_armored_hit(damage)
+		return
 	var enemy := source as Enemy
 	if enemy != null and enemy.is_contact_hit:
 		_on_contact_hit(damage, knockback)
@@ -1291,12 +1417,22 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	dash_slash.set_active(false)
 	rising_slash.cancel()
 	spin_rise.cancel()
+	dive.set_body_active(self, false)
 	_rising_up = false
 	_cancel_chain()
 	_dash_slash_queued = false
 	trail.visible = false
 	_set_flash(Color(1.0, 0.35, 0.35), 0.9)
 	visual.play(&"hurt")
+
+
+## 강하 중 피격: 피해만 받고 강하는 그대로 이어간다 (밀려나지도 않는다).
+func _on_armored_hit(damage: int) -> void:
+	GameFeel.shake(0.25)
+	GameFeel.flash(Color(1.0, 0.25, 0.25), 0.12, 0.1)
+	_sfx(sfx_hurt, 0.06)
+	health_changed.emit(health.hp - damage, health.max_hp)
+	_set_flash(Color(1.0, 0.35, 0.35), 0.8)
 
 
 ## 몸에 부딪힌 가벼운 피격: 경직·콤보 끊김 없이 밀려나기만 한다 (조작은 계속된다).
@@ -1335,6 +1471,7 @@ func _on_died() -> void:
 	dash_slash.set_active(false)
 	rising_slash.cancel()
 	spin_rise.cancel()
+	dive.set_body_active(self, false)
 	_rising_up = false
 	_cancel_chain()
 	_dash_slash_queued = false
@@ -1408,7 +1545,10 @@ func _update_visual(delta: float) -> void:
 		visual.modulate.a = lerpf(visual.modulate.a, body_alpha, 1.0 - exp(-(40.0 if in_spin else 22.0) * delta))
 		if not in_spin and visual.modulate.a > 0.99:
 			visual.modulate.a = 1.0
-	if action == Action.DEAD:
+	if action == Action.DIVE and _dive_phase != DivePhase.LAND:
+		# 강하: 머리부터 아래로 — 몸을 뒤집고 급강하 각도만큼 기울인다
+		visual.rotation = lerp_angle(visual.rotation, PI - _dive_tilt, 1.0 - exp(-24.0 * delta))
+	elif action == Action.DEAD:
 		# 쓰러짐: 뒤로 넘어간다
 		visual.rotation = lerp(visual.rotation, -facing * 1.35, 1.0 - exp(-10.0 * delta))
 	else:
