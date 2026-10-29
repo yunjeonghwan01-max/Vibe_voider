@@ -13,6 +13,11 @@ extends Enemy
 ##      막아내고 → 역반격 창(BAIT): 세상이 거의 멈추고(실제 0.5초) 화면이 어두워지며 부딪힌 자리에 금·은빛 X자
 ##      문장(KnightCross)이 새겨진다. 그 사이 반격 키 = 방향 무관 역반격(X자 결정타 + 긴 경직).
 ##      놓치면 플레이어 머리 위로 순간이동 → 잠깐 멈췄다가(붉은 경고 기둥) 내려찍기. 내려찍기는 반격 불가 — 피해야 한다.
+##      랠리(확률 구조, 입력은 일반 반격 키): 보스가 받아친 순간마다 역반격 창이 열릴지 recounter_open_chance로 굴린다.
+##      안 열리면 X자 문장 없이 짧게 맞부딪힌 뒤 곧장 내려찍기 — 무엇을 눌러도 소용없다.
+##      열리면 그 창에서 역반격에 성공했을 때 보스가 다시 받아칠지(_bait_rally)를 미리 굴려 X자 색으로 보여 준다
+##      (금·은 = 무너진다, 푸른빛 = 다시 받아친다). 확률은 입력 전에 정해지므로 성공한 입력의 결과를 뒤집지 않는다.
+##      다시 받아치면 다음 공방(새 창 굴림)으로 이어지고, 역반격이 오갈 때마다 보스의 재대응 확률이 오른다(rally_max에서 끝).
 ##   4. 돌진 (RUSH, 쿨타임 12초) — 바닥 끝으로 미끄러져 물러난 뒤 웅크려 힘을 모으고(붉은 경로선),
 ##      가속하며 바닥 전체를 돌진한다. 플레이어와 아주 가까워지는 순간만 아주 짧게(0.15초) 반짝인다 —
 ##      그때 반격하면 긴 스턴. 반대쪽 벽에 부딪히면 벽이 깨진다.
@@ -50,6 +55,8 @@ const RAISED_DEG := -140.0
 const STRIKE_END_DEG := 75.0
 const GUARD_COLOR := Color(0.86, 0.9, 1.0)
 const DANGER_COLOR := Color(1.0, 0.25, 0.22)
+const RALLY_GOLD := Color(0.5, 0.78, 1.0, 1.0)     # 다시 받아칠 창의 X자 (금 대신 푸른빛)
+const RALLY_SILVER := Color(0.72, 0.62, 1.0, 1.0)
 
 @export_group("Room")
 @export var floor_y: float = 0.0
@@ -94,6 +101,14 @@ const DANGER_COLOR := Color(1.0, 0.25, 0.22)
 @export var bait_time_scale: float = 0.1
 @export var bait_counter_damage: int = 160    # 역반격 성공 X자 결정타
 @export var bait_stun: float = 2.8
+
+@export_group("Rally")
+@export var recounter_open_chance: float = 0.6   # 보스가 받아친 순간, 플레이어에게 역반격 창이 열릴 확률
+@export var rally_chance: float = 0.3            # 역반격에 성공했을 때 보스가 다시 받아칠 확률 (아직 역반격이 오가지 않았을 때)
+@export var rally_chance_boost: float = 0.3      # 역반격이 한 번 오갈 때마다 위 확률이 이만큼 오른다
+@export var rally_chance_max: float = 0.85
+@export var rally_max: int = 5                   # 한 공방에서 역반격이 이만큼 오가면 보스는 반드시 무너진다
+@export var closed_clash_time: float = 0.2       # 창이 안 열렸을 때 맞부딪히는 짧은 정지 (실제 시간) 뒤 곧장 내려찍기
 
 @export_group("Rush")
 @export var rush_cooldown: float = 12.0
@@ -156,6 +171,9 @@ var _roared: bool = false
 var _danger: float = 0.0            # _draw 경고 연출 맥동용
 var _bait_end_ms: int = 0           # 역반격 창이 닫히는 실제 시각 (세상이 느려지므로 물리 delta로 세지 않는다)
 var _cross: KnightCross = null
+var _bait_open: bool = false        # 이번 맞부딪힘에서 역반격 창이 열렸는가
+var _bait_rally: bool = false       # 이번 창에서 역반격당하면 다시 받아칠 것인가 (창이 열릴 때 미리 정한다)
+var _rally_count: int = 0           # 이번 공방에서 오간 역반격 수
 
 
 func _on_ready() -> void:
@@ -303,7 +321,7 @@ func _enemy_ai(delta: float) -> void:
 				_to_idle(0.3)
 		Atk.BAIT:
 			velocity = Vector2.ZERO
-			_flash_col = Color(1.0, 0.85, 0.45)
+			_flash_col = Color(1.0, 0.85, 0.45) if _bait_open else DANGER_COLOR
 			_flash_amount = maxf(_flash_amount, 0.55)
 			if Time.get_ticks_msec() >= _bait_end_ms:
 				_end_bait()
@@ -517,7 +535,7 @@ func _begin_window() -> void:
 func is_counter_open() -> bool:
 	if state != State.ACTIVE:
 		return false
-	return _atk == Atk.WINDOW or _atk == Atk.BAIT or (_atk == Atk.RUSH and _rush_window > 0.0)
+	return _atk == Atk.WINDOW or (_atk == Atk.BAIT and _bait_open) or (_atk == Atk.RUSH and _rush_window > 0.0)
 
 
 func counter_strike_damage(_default_damage: int) -> int:
@@ -525,7 +543,7 @@ func counter_strike_damage(_default_damage: int) -> int:
 		Atk.WINDOW:
 			return countered_damage
 		Atk.BAIT:
-			return bait_counter_damage
+			return 0 if _bait_rally else bait_counter_damage   # 다시 받아칠 거라면 X자 결정타는 없다
 	return 0
 
 
@@ -599,15 +617,20 @@ func _end_guard() -> void:
 	hurtbox.invincible = false
 
 
-## 막았다 → 역반격 창. 세상이 거의 멈춘 채(실제 bait_time초) X자 문장이 새겨지고, 그 사이에만 받아칠 수 있다.
+## 막았다 → 보스가 받아친 맞부딪힘. 랠리의 첫 공방.
 func _guard_triggered() -> void:
 	_end_guard()
 	hurtbox.invincible = true              # 창·순간이동 중에는 맞지 않는다 (받아치면 on_countered가, 나타나면 풀린다)
+	_rally_count = 0
+	_clash()
+
+
+## 보스가 받아쳤다 (반격 자세에 걸린 공격, 또는 랠리 중 플레이어의 역반격).
+## 역반격 창이 열리면 세상이 거의 멈춘 채(실제 bait_time초) X자 문장이 새겨지고 그 사이에만 받아칠 수 있다.
+## 안 열리면 짧게 맞부딪힌 뒤 곧장 내려찍기로 이어진다.
+func _clash() -> void:
 	_sfx(sfx_guard_clang, 0.0)
-	_sfx(sfx_cue, 0.0)
-	GameFeel.hit_stop(bait_time, bait_time_scale)
 	GameFeel.shake(0.45)
-	GameFeel.flash(Color(1.0, 0.9, 0.65), 0.35, 0.04)   # 게임 시간 0.04초 = 느려진 세상에선 창 내내 옅어진다
 	_flash_col = Color.WHITE
 	_flash_amount = 1.0
 	var clash := global_position + Vector2(facing * 60.0, -40.0)
@@ -619,10 +642,25 @@ func _guard_triggered() -> void:
 		s.with_ring(GUARD_COLOR, 110.0)
 	_atk = Atk.BAIT
 	velocity = Vector2.ZERO
+	_bait_open = randf() < recounter_open_chance
+	if not _bait_open:
+		_bait_rally = false
+		GameFeel.hit_stop(closed_clash_time, 0.05)
+		_flash_col = DANGER_COLOR
+		_bait_end_ms = Time.get_ticks_msec() + int(closed_clash_time * 1000.0)
+		return
+	var chance := minf(rally_chance + rally_chance_boost * _rally_count, rally_chance_max)
+	_bait_rally = _rally_count < rally_max and randf() < chance
+	_sfx(sfx_cue, 0.0)
+	GameFeel.hit_stop(bait_time, bait_time_scale)
+	GameFeel.flash(Color(1.0, 0.9, 0.65), 0.35, 0.04)   # 게임 시간 0.04초 = 느려진 세상에선 창 내내 옅어진다
 	_bait_end_ms = Time.get_ticks_msec() + int(bait_time * 1000.0)
 	if cross_scene != null:
 		_cross = cross_scene.instantiate() as KnightCross
 		_cross.window = bait_time
+		if _bait_rally:
+			_cross.gold = RALLY_GOLD
+			_cross.silver = RALLY_SILVER
 		_fx_parent().add_child(_cross)
 		_cross.global_position = clash
 
@@ -820,6 +858,12 @@ func _on_parried_react(from_pos: Vector2) -> void:
 ## 카유공(+섬광) 또는 돌진 반짝임을 방향 무관 반격으로 받아쳤다.
 func on_countered(from_pos: Vector2) -> void:
 	if state == State.DEAD:
+		return
+	if _atk == Atk.BAIT and _bait_rally:
+		# 랠리: 역반격을 다시 받아친다 — 다음 공방
+		_rally_count += 1
+		_release_cross(true)
+		_clash()
 		return
 	var was := _atk
 	_release_cross(was == Atk.BAIT)
