@@ -19,6 +19,8 @@
 [ext_resource type="Script" uid="uid://c38qqiperccge" path="res://actors/player/abilities/lightning/lightning_ability.gd" id="14_lightning"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/lightning/lightning_bolt.tscn" id="15_bolt"]
 [ext_resource type="Script" path="res://actors/player/abilities/rising_slash/rising_slash_ability.gd" id="18_rising"]
+[ext_resource type="Script" path="res://actors/player/abilities/spin_rise/spin_rise_ability.gd" id="19_spin"]
+[ext_resource type="Script" path="res://actors/player/abilities/spin_rise/spin_rise_effect.gd" id="20_spin_fx"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/haki/haki_burst.tscn" id="16_haki"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/moon_slash/moon_slash.tscn" id="17_moon"]
 [ext_resource type="AudioStream" uid="uid://cnlltvsiboews" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
@@ -62,6 +64,12 @@ radius = 72.0
 
 [sub_resource type="CircleShape2D" id="Circ_rising"]
 radius = 120.0
+
+[sub_resource type="RectangleShape2D" id="Rect_spin_hit"]
+size = Vector2(84, 144)
+
+[sub_resource type="RectangleShape2D" id="Rect_spin_sensor"]
+size = Vector2(76, 112)
 
 [sub_resource type="RectangleShape2D" id="Rect_dash_slash"]
 size = Vector2(260, 50)
@@ -183,6 +191,34 @@ script = ExtResource("5_hit")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/RisingSlash/Hitbox"]
 shape = SubResource("Circ_rising")
+
+[node name="SpinRise" type="Node2D" parent="Combat"]
+script = ExtResource("19_spin")
+
+[node name="Hitbox" type="Area2D" parent="Combat/SpinRise"]
+position = Vector2(0, -42)
+collision_layer = 32
+collision_mask = 16
+monitoring = false
+script = ExtResource("5_hit")
+apply_on_contact = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/SpinRise/Hitbox"]
+shape = SubResource("Rect_spin_hit")
+
+[node name="Sensor" type="Area2D" parent="Combat/SpinRise"]
+position = Vector2(0, -30)
+collision_layer = 0
+collision_mask = 4
+monitoring = false
+monitorable = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/SpinRise/Sensor"]
+shape = SubResource("Rect_spin_sensor")
+
+[node name="Effect" type="Node2D" parent="Combat/SpinRise"]
+z_index = 1
+script = ExtResource("20_spin_fx")
 
 [node name="Audio" type="Node2D" parent="." unique_id=1525423985]
 

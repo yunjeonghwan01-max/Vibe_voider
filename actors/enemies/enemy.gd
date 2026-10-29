@@ -16,7 +16,7 @@ extends CharacterBody2D
 
 signal defeated(enemy: Enemy)
 
-enum State { SPAWNING, ACTIVE, HITSTUN, STAGGER, DEAD }
+enum State { SPAWNING, ACTIVE, HITSTUN, STAGGER, DEAD, CARRIED }
 
 const GLINT_COLOR := Color(1.0, 0.93, 0.58)
 const HIT_COLOR := Color(1.0, 0.42, 0.42)
@@ -34,6 +34,7 @@ const MAX_AIRBORNE := 1.4
 @export var parry_stagger_time: float = 1.0  # 반격당하면 큰 빈틈
 @export var knockback_resist: float = 0.0    # 0 = 넉백 그대로, 1 = 완전 저항
 @export var spawn_time: float = 0.6          # 등장 연출 동안은 공격하지 않고 맞지도 않는다
+@export var carry_release_stun: float = 0.35 # 플레이어 기술에 휩쓸렸다 풀려난 뒤 경직 (공중에서 떨어지는 동안)
 
 @export_group("Contact")
 @export var contact_damage: int = 6          # 몸에 닿으면 주는 피해 (플레이어 피격 무적 동안은 다시 안 들어간다)
@@ -66,6 +67,8 @@ var _glint_t: float = 0.0
 var _glint_fx: Node2D = null
 var _flash_amount: float = 0.0
 var _flash_col: Color = Color.WHITE
+var _carrier: Node2D = null          # 휩쓸려 함께 움직이는 대상 (State.CARRIED)
+var _carry_offset: Vector2 = Vector2.ZERO
 var _airborne: bool = false
 var _air_t: float = 0.0
 var _contact_area: Area2D = null
@@ -128,6 +131,8 @@ func _physics_process(delta: float) -> void:
 				state = State.ACTIVE
 				_airborne = false
 				_on_stagger_end()
+		State.CARRIED:
+			_process_carried(delta)
 		_:
 			_enemy_ai(delta)
 			_apply_contact_damage()
@@ -282,12 +287,62 @@ func _begin_spawn() -> void:
 	_burst(Color(0.6, 0.4, 1.0, 1.0), 14, 60.0, 0.4, true)
 
 
+# ─────────────────────────── 휩쓸림 (플레이어 회전 상승 등) ───────────────────────────
+const CARRY_SNAG_DISTANCE := 140.0    # 벽·발판에 걸려 기술에서 이만큼 떨어지면 놓친다
+const CARRY_SNAG_RISE := -260.0       # 놓칠 때 남는 위쪽 관성
+const CARRY_HUG_X := 30.0             # 휘말린 적이 붙는 좌우 거리 (몸 앞/뒤)
+
+
+func can_be_carried() -> bool:
+	return state == State.ACTIVE or state == State.HITSTUN or state == State.STAGGER
+
+
+## carrier를 따라 움직인다. 붙잡을 수 없는 상태(등장/사망/이미 휩쓸림)면 false.
+func begin_carry(carrier: Node2D, offset_y: float) -> bool:
+	if not can_be_carried() or carrier == null:
+		return false
+	end_glint()
+	if attack_hitbox != null:
+		attack_hitbox.monitoring = false
+	state = State.CARRIED
+	_carrier = carrier
+	_carry_offset = Vector2(global_position.x - carrier.global_position.x, offset_y)
+	_on_hurt(carrier)                    # 하던 공격을 끊는다
+	return true
+
+
+func end_carry(release_velocity: Vector2) -> void:
+	if state != State.CARRIED:
+		return
+	_carrier = null
+	state = State.HITSTUN
+	_state_timer = carry_release_stun
+	velocity = release_velocity
+
+
+func _process_carried(delta: float) -> void:
+	if _carrier == null or not is_instance_valid(_carrier):
+		end_carry(Vector2.ZERO)
+		return
+	var target := _carrier.global_position + _carry_offset
+	if global_position.distance_to(target) > CARRY_SNAG_DISTANCE:
+		end_carry(Vector2(0.0, CARRY_SNAG_RISE))   # 걸려서 빠졌다 — 잠깐 떠오르다 떨어진다
+		return
+	# 몸 앞뒤로 바짝 휘말려 따라 올라간다. 벽/천장 충돌은 move_and_slide가 처리한다.
+	_carry_offset.x = lerpf(_carry_offset.x, signf(_carry_offset.x) * CARRY_HUG_X, 1.0 - exp(-16.0 * delta))
+	velocity = (target - global_position) / maxf(delta, 0.0001)
+
+
 # ─────────────────────────── 피격 / 반격당함 / 사망 ───────────────────────────
 func _on_hit_received(_damage: int, source: Node, knockback: Vector2) -> void:
 	if state == State.DEAD:
 		return
 	_flash_col = HIT_COLOR
 	_flash_amount = 1.0
+	if state == State.CARRIED:
+		# 휩쓸린 동안은 위치를 기술이 정한다 — 번쩍임과 찌그러짐만.
+		visual.scale = Vector2(1.18 * signf(facing), 0.84)
+		return
 	var armored := _has_armor() and state == State.ACTIVE
 	var resist := 0.85 if armored else knockback_resist
 	if knockback != Vector2.ZERO:
@@ -407,7 +462,10 @@ func _update_visual(delta: float) -> void:
 	var sgn := signf(facing) if facing != 0.0 else 1.0
 	visual.scale = Vector2(mag.x * sgn, mag.y)
 	# 반짝이는 동안은 힘을 모으듯 미세하게 떤다.
-	visual.position.x = randf_range(-1.0, 1.0) if _glinting else 0.0
+	if state == State.CARRIED:
+		visual.position.x = randf_range(-2.5, 2.5)   # 갈리는 동안 덜덜 떨린다
+	else:
+		visual.position.x = randf_range(-1.0, 1.0) if _glinting else 0.0
 	# 띄워진 동안은 몸이 뒤로 젖혀져 빙글 기운다
 	var tilt := -0.5 * signf(facing) if _airborne and state == State.HITSTUN else 0.0
 	visual.rotation = lerpf(visual.rotation, tilt, 1.0 - exp(-12.0 * delta))

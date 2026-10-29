@@ -26,7 +26,8 @@ signal ultimate_changed(charge: float, max_charge: float)
 signal ultimate_ready_changed(is_ready: bool)
 signal died
 
-enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SLASH, ULTIMATE, HURT, DEAD }
+enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SLASH, SPIN_RISE, ULTIMATE, HURT, DEAD }
+enum SpinPhase { WINDUP, RISE, END }
 
 # ─────────────────────────── 이동 튜닝 ───────────────────────────
 @export_group("Movement")
@@ -76,9 +77,9 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SL
 @export_group("Skill Slots")
 ## 입력 슬롯마다 장착한 스킬 이름. 스킬 키(E)를 누를 때 아래(S/↓) > 위(W/↑) > 기본 순으로 슬롯을 고른다.
 ## 대쉬 슬롯은 대쉬 중(과 직후 유예 시간)의 E — 방향키보다 우선한다. "none" = 비어 있음.
-@export_enum("none", "void_orb", "lightning", "rising_slash") var slot_neutral: String = "void_orb"
-@export_enum("none", "void_orb", "lightning", "rising_slash") var slot_up: String = "lightning"
-@export_enum("none", "void_orb", "lightning", "rising_slash") var slot_down: String = "rising_slash"
+@export_enum("none", "void_orb", "spin_rise", "lightning", "rising_slash") var slot_neutral: String = "void_orb"
+@export_enum("none", "void_orb", "spin_rise", "lightning", "rising_slash") var slot_up: String = "spin_rise"
+@export_enum("none", "void_orb", "spin_rise", "lightning", "rising_slash") var slot_down: String = "rising_slash"
 @export_enum("none", "dash_slash") var slot_dash: String = "dash_slash"
 @export_enum("none", "moon_slash") var slot_ultimate: String = "moon_slash"
 
@@ -105,6 +106,19 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SL
 @export var rising_windup: float = 0.5           # 자세를 낮추고 모으는 시간 (이동 불가, 공중이면 떠 있다)
 @export var rising_launch_velocity: float = -1000.0
 @export var rising_bump_fall_speed: float = 320.0  # 튀어 오르다 적 몸에 부딪히면 이 속도로 떨어진다
+
+@export_group("Spin Rise")
+@export var spin_windup: float = 0.1            # 짧게 몸을 낮추는 예비 동작 (제자리 체공)
+@export var spin_rise_speed: float = 1050.0     # 상승 속도 (px/초)
+@export var spin_rise_height: float = 300.0     # 시작 높이에서 이만큼 올라간다 (플레이어 키 54의 약 5.5배)
+@export var spin_slowdown: float = 0.3          # 목표 높이의 마지막 이 비율 구간에서 감속해 부드럽게 멈춘다
+@export var spin_side_accel: float = 1400.0     # 좌우 입력이 만드는 수평 가속도 — 반대로 눌러도 관성이 남았다가 서서히 꺾인다
+@export var spin_side_max_speed: float = 260.0
+@export var spin_side_range: float = 90.0       # 시작 지점에서 좌우로 벗어날 수 있는 거리 (몸 폭 30의 약 3배)
+@export var spin_exit_speed: float = 240.0      # 상승이 끝난 뒤 조금 더 떠오르는 속도 → 자연스럽게 정점 후 낙하
+@export var spin_end_time: float = 0.14         # 회오리가 흩어지며 몸이 드러나는 마무리 (이후 자유 상태)
+@export var spin_body_alpha: float = 0.08       # 회오리에 잠긴 동안 몸의 불투명도
+@export var spin_invincible: bool = true        # 예비 동작·상승 중 무적 (실험값)
 
 @export_group("Ultimate")
 @export var ultimate_max: float = 100.0
@@ -136,6 +150,7 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SL
 @onready var dash_slash: DashSlashAbility = $Combat/DashSlash
 @onready var lightning: LightningAbility = $Combat/Lightning
 @onready var rising_slash: RisingSlashAbility = $Combat/RisingSlash
+@onready var spin_rise: SpinRiseAbility = $Combat/SpinRise
 @onready var sfx_swing: Array[AudioStreamPlayer2D] = [
 	$Audio/Swing1 as AudioStreamPlayer2D, $Audio/Swing2 as AudioStreamPlayer2D, $Audio/Swing3 as AudioStreamPlayer2D]
 @onready var sfx_hit: AudioStreamPlayer2D = $Audio/Hit
@@ -185,6 +200,9 @@ var _dash_slash_window: float = 0.0    # 대시 직후 대시 참격 유예 시�
 var _dash_start_pos: Vector2 = Vector2.ZERO   # 마지막 대시를 시작한 곳 — 대시 참격이 지나온 길까지 벤다
 var _lightning_struck: bool = false
 var _rising_up: bool = false          # 승천 참격으로 튀어 오르는 중 (적 몸에 부딪히면 떨어진다)
+var _spin_phase: int = SpinPhase.WINDUP
+var _spin_start: Vector2 = Vector2.ZERO
+var _spin_ticks_hit: int = 0          # 이번 회전 상승에서 명중한 틱 수 (타격음 음높이 상승용)
 
 var _dash_iframe_t: float = 0.0       # 대시 후 숨은 무적 남은 시간
 var _iframe_t: float = 0.0            # 피격 무적 남은 시간 (깜빡임 표시용 — 실제 무적은 Hurtbox가 처리)
@@ -212,6 +230,7 @@ func _ready() -> void:
 	dash_slash.hit_landed.connect(_on_dash_slash_landed)
 	lightning.hit_landed.connect(_on_lightning_hit)
 	rising_slash.hit_landed.connect(_on_lightning_hit)
+	spin_rise.hit_landed.connect(_on_spin_rise_hit)
 
 	attack_hitbox.source = self
 	attack_hitbox.monitoring = false
@@ -266,6 +285,8 @@ func _physics_process(delta: float) -> void:
 			_process_lightning(delta)
 		Action.RISING_SLASH:
 			_process_rising_slash(delta)
+		Action.SPIN_RISE:
+			_process_spin_rise(delta)
 		Action.DASH_SLASH:
 			_process_dash_slash(delta)
 		Action.ULTIMATE:
@@ -299,7 +320,7 @@ func _tick_timers(delta: float) -> void:
 	if _dash_iframe_t > 0.0:
 		_dash_iframe_t -= delta
 		# 반격/궁극기/사망처럼 무적을 스스로 관리하는 동작 중이면 건드리지 않는다
-		if _dash_iframe_t <= 0.0 and action not in [Action.DASH, Action.PARRY, Action.ULTIMATE, Action.DEAD]:
+		if _dash_iframe_t <= 0.0 and action not in [Action.DASH, Action.PARRY, Action.SPIN_RISE, Action.ULTIMATE, Action.DEAD]:
 			hurtbox.invincible = false
 	if _rising_up and (velocity.y >= 0.0 or is_on_floor()):
 		_rising_up = false
@@ -359,6 +380,8 @@ func _can_cast_skill(skill: String) -> bool:
 	match skill:
 		"void_orb":
 			return void_orb.can_cast()
+		"spin_rise":
+			return spin_rise.can_use()
 		"lightning":
 			return lightning.can_cast()
 		"rising_slash":
@@ -370,6 +393,8 @@ func _cast_skill(skill: String) -> void:
 	match skill:
 		"void_orb":
 			_start_skill()
+		"spin_rise":
+			_start_spin_rise()
 		"lightning":
 			_start_lightning()
 		"rising_slash":
@@ -755,6 +780,143 @@ func _on_lightning_hit(_hurt: HurtboxComponent) -> void:
 	_add_ultimate(ult_charge_on_hit)
 
 
+# ─────────────────────────── 스킬: 회전 상승 ───────────────────────────
+## 예비 동작(제자리 체공) → 상승: 좌우 입력은 수평 "가속도"라 관성이 남고, 시작 지점 좌우 spin_side_range 안에서만 움직인다.
+## 벽·천장에 닿으면 바로 멈춘다. 예비 동작·상승 중 반격으로 끊으면 휩쓸린 적을 놓고 상승 관성은 그대로 둔다.
+func _start_spin_rise() -> void:
+	action = Action.SPIN_RISE
+	_spin_phase = SpinPhase.WINDUP
+	_action_time = 0.0
+	_spin_ticks_hit = 0
+	_spin_start = global_position
+	_dash_slash_window = 0.0
+	velocity = Vector2(velocity.x * 0.25, 0.0)   # 점프 중이어도 그 자리에 멈춰 힘을 모은다
+	if spin_invincible:
+		hurtbox.invincible = true
+	_squash = Vector2(1.28, 0.74)                 # 웅크림 (예비 동작)
+	spin_rise.begin(self, spin_windup)
+	visual.play(&"spin_rise")
+	_set_flash(Color(0.8, 0.65, 1.0), 0.7)
+	_sfx(sfx_dash, 0.04)
+
+
+func _process_spin_rise(delta: float) -> void:
+	_action_time += delta
+	if _spin_phase != SpinPhase.END and Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+		_cancel_spin_rise()
+		_start_parry()
+		return
+	match _spin_phase:
+		SpinPhase.WINDUP:
+			velocity.x = move_toward(velocity.x, 0.0, ground_friction * delta)
+			velocity.y = 0.0
+			if _action_time >= spin_windup:
+				_launch_spin_rise()
+		SpinPhase.RISE:
+			var risen := _spin_start.y - global_position.y
+			var progress := clampf(risen / maxf(spin_rise_height, 1.0), 0.0, 1.0)
+			spin_rise.advance(progress)
+			# 마지막 구간에서 감속 → 목표 높이에 부드럽게 도착
+			var slow := clampf((1.0 - progress) / maxf(spin_slowdown, 0.01), 0.35, 1.0)
+			velocity.y = -spin_rise_speed * slow
+			_steer_spin_rise(delta)
+			var max_time := spin_rise_height / maxf(spin_rise_speed, 1.0) * 2.5 + 0.1   # 끼임 안전장치
+			# 첫 프레임은 아직 움직이기 전이라 벽/천장 판정을 건너뛴다
+			var blocked := _action_time > delta and (is_on_ceiling() or is_on_wall())
+			if progress >= 1.0 or blocked or _action_time >= max_time:
+				_end_spin_rise(not blocked)
+		SpinPhase.END:
+			_apply_horizontal(delta, _move_input(), true)
+			_apply_gravity_no_cut(delta)
+			# 마무리 중에도 다음 행동으로 바로 이어갈 수 있다 (공중 콤보)
+			if Input.is_action_just_pressed("player_attack"):
+				action = Action.NONE
+				_start_attack(0)
+				return
+			if Input.is_action_just_pressed("player_dash") and _can_dash():
+				action = Action.NONE
+				_start_dash()
+				return
+			if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+				action = Action.NONE
+				_start_parry()
+				return
+			if Input.is_action_just_pressed("player_skill") and _can_cast_skill(_held_skill_slot()):
+				action = Action.NONE
+				_cast_skill(_held_skill_slot())   # 공중에서도 쿨다운이 허락하는 한 다시 쓸 수 있다
+				return
+			if _action_time >= spin_end_time:
+				action = Action.NONE
+
+
+## 좌우 입력 = 수평 가속도 (입력이 없으면 관성 유지). 시작 지점에서 spin_side_range 밖으로는 못 나간다.
+func _steer_spin_rise(delta: float) -> void:
+	velocity.x = clampf(velocity.x + _move_input() * spin_side_accel * delta, -spin_side_max_speed, spin_side_max_speed)
+	var offset := global_position.x - _spin_start.x
+	var next := offset + velocity.x * delta
+	if absf(next) > spin_side_range and signf(velocity.x) == signf(next):
+		# 경계에 딱 붙이고, 이미 경계면 바깥쪽 속도를 없앤다
+		velocity.x = 0.0 if absf(offset) >= spin_side_range - 0.5 else (signf(next) * spin_side_range - offset) / delta
+
+
+func _launch_spin_rise() -> void:
+	_spin_phase = SpinPhase.RISE
+	_action_time = 0.0
+	velocity.y = -spin_rise_speed
+	_squash = Vector2(0.72, 1.34)                 # 튀어 오르며 길게 늘어난다
+	trail.visible = true
+	GameFeel.shake(0.18)
+	_sfx(sfx_dash_slash, 0.05)
+	_spawn_spark(global_position + Vector2(0.0, 30.0), Color(0.85, 0.7, 1.0, 1.0), 10, 120.0, 90.0, 46.0)
+
+
+## 상승 끝. reached = 목표 높이까지 올라갔다 (벽·천장에 막혔으면 false — 더 떠오르지 않는다).
+func _end_spin_rise(reached: bool) -> void:
+	_spin_phase = SpinPhase.END
+	_action_time = 0.0
+	velocity.y = -spin_exit_speed if reached else 0.0
+	spin_rise.finish(Vector2(velocity.x * 0.4, -spin_exit_speed * 1.15), spin_end_time)
+	hurtbox.invincible = false
+	trail.visible = false
+	_squash = Vector2(1.18, 0.86)
+	visual.play(&"locomotion")                    # 위로 떠오르는 점프 자세로 자연스럽게 이어진다
+	_spawn_spark(global_position + Vector2(0.0, -40.0), Color(0.9, 0.8, 1.0, 1.0), 12, 360.0, -90.0, 52.0)
+
+
+## 반격으로 끊김 — 휩쓸린 적을 바로 놓는다. 속도는 건드리지 않아 상승 관성이 남는다.
+func _cancel_spin_rise() -> void:
+	spin_rise.cancel()
+	hurtbox.invincible = false
+	trail.visible = false
+	action = Action.NONE
+
+
+## 회전 상승 직후 낙하 — 점프 키를 떼도 남은 상승이 잘리지 않게 한다 (툭 끊기지 않고 정점을 그린다).
+func _apply_gravity_no_cut(delta: float) -> void:
+	if is_on_floor():
+		return
+	var g := gravity * (fall_gravity_mult if velocity.y > 0.0 else 1.0)
+	velocity.y = minf(velocity.y + g * delta, max_fall_speed)
+
+
+func _on_spin_rise_hit(hurt: HurtboxComponent, last_tick: bool) -> void:
+	_spin_ticks_hit += 1
+	_add_ultimate(ult_charge_on_hit * 0.25)
+	if last_tick:
+		GameFeel.hit_stop(0.05)
+		GameFeel.shake(0.32)
+		_sfx(sfx_hit_heavy, 0.06)
+	else:
+		# 갈리는 소리: 틱마다 음높이가 조금씩 올라간다
+		GameFeel.shake(0.07)
+		sfx_hit.pitch_scale = 0.9 + 0.05 * _spin_ticks_hit + randf_range(-0.03, 0.03)
+		sfx_hit.play()
+	var col := Color(1.0, 0.95, 0.8, 1.0) if last_tick else Color(0.9, 0.78, 1.0, 1.0)
+	_spawn_spark(hurt.global_position + Vector2(randf_range(-10.0, 10.0), randf_range(-8.0, 8.0)), col,
+			10 if last_tick else 4, 360.0 if last_tick else 140.0, randf_range(0.0, 360.0),
+			52.0 if last_tick else 30.0)
+
+
 # ─────────────────────────── 스킬: 대시 참격 ───────────────────────────
 func _queue_dash_slash() -> void:
 	if _dash_slash_queued or not _dash_slot_ready():
@@ -1128,6 +1290,7 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	attack_hitbox.monitoring = false
 	dash_slash.set_active(false)
 	rising_slash.cancel()
+	spin_rise.cancel()
 	_rising_up = false
 	_cancel_chain()
 	_dash_slash_queued = false
@@ -1171,6 +1334,7 @@ func _on_died() -> void:
 	attack_hitbox.monitoring = false
 	dash_slash.set_active(false)
 	rising_slash.cancel()
+	spin_rise.cancel()
 	_rising_up = false
 	_cancel_chain()
 	_dash_slash_queued = false
@@ -1236,6 +1400,14 @@ func _update_visual(delta: float) -> void:
 		visual.position.y = lerp(visual.position.y, 0.0, 1.0 - exp(-14.0 * delta))
 
 	visual.scale = Vector2(facing * _squash.x, _squash.y)
+	# 회오리에 잠긴 동안 몸이 거의 보이지 않는다 (맺힐 때 빠르게 사라지고, 흩어질 때 다시 드러난다).
+	# 피격 깜빡임(_process)과 겹치지 않게 그동안은 건드리지 않는다.
+	var in_spin := action == Action.SPIN_RISE and _spin_phase != SpinPhase.END
+	if in_spin or (_iframe_t <= 0.0 and visual.modulate.a < 1.0):
+		var body_alpha := spin_body_alpha if in_spin else 1.0
+		visual.modulate.a = lerpf(visual.modulate.a, body_alpha, 1.0 - exp(-(40.0 if in_spin else 22.0) * delta))
+		if not in_spin and visual.modulate.a > 0.99:
+			visual.modulate.a = 1.0
 	if action == Action.DEAD:
 		# 쓰러짐: 뒤로 넘어간다
 		visual.rotation = lerp(visual.rotation, -facing * 1.35, 1.0 - exp(-10.0 * delta))
