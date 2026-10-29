@@ -7,8 +7,12 @@ extends CharacterBody2D
 ## 전투:  3연속 참격 콤보 / 반격(패링) / 슬롯 스킬(E: 기본·위·아래·대시 중 슬롯 — 장착은 slot_* 속성) / 궁극기(전투로 충전, 수동 발동)
 ##
 ## 반격 규칙: 적이 공격 직전 0.4초 동안 금빛으로 "반짝"인다. 그 순간 반격 키를 눌러야만 성공한다.
-##   - 카유공(감시자의 + 섬광, 0.4초): 바라보는 방향과 무관하게 반격 키로 받아친다 → X자 참격으로 즉사.
-##     단, 그 입력이 ParryBox 안의 반짝이는 근접 공격 반격에 쓰였다면 카유공은 받아치지 못한다.
+##   - 한 번의 입력은 대상 하나만 받아친다. 동시에 뜬 두 공격은 각각 따로 눌러야 한다.
+##   - 근접(반짝임): 그 적을 바라봐야 한다 (방향키와 반격 키를 동시에 눌러 돌아서며 받아쳐도 된다).
+##     성공하면 앞쪽으로 올려 베어 범위 안의 일반 적(field_mob)을 모두 기절시킨다 (피해 없음, 다른 반짝임은 제외).
+##   - 카유공(감시자의 + 섬광, 0.4초): 바라보는 방향과 무관하게 반격 키로 받아친다 → X자 참격 결정타,
+##     X자가 되돌아가는 길(플레이어 → 발사자)에 있던 적도 피해를 입는다.
+##     단, 그 입력이 바라보는 쪽의 반짝이는 근접 공격 반격에 쓰였다면 카유공은 받아치지 못한다.
 ##   - 연쇄 반격: 반격(근접/카유공)에 성공한 뒤 chain_window(0.2초) 안에 반격 키를 다시 누르면 "예약"된다.
 ##     예약은 창이 끝날 때까지 유효해서, 그 사이 반짝임/카유공이 생기면 자동으로 받아친다.
 ##     끝까지 받아칠 게 없으면 헛반격 없이 조용히 끝난다. 받아칠 때마다 창이 다시 열려 계속 이어갈 수 있다.
@@ -72,8 +76,12 @@ enum DivePhase { HOP, HANG, FALL, LAND }
 @export var counter_damage: int = 999            # 카유공 반격 결정타 기본값 (즉사). 적이 counter_strike_damage()로 바꿀 수 있다
 @export var chain_window: float = 0.2            # 반격 성공 후 연쇄 반격 입력을 받는 시간
 @export var haki_every: int = 3                  # 연쇄 반격이 이만큼 이어질 때마다 패기 방출
-@export var haki_damage: int = 15                # 평타 1타(10)의 1.5배
+@export var haki_damage: int = 20                # 임시 2N
 @export var haki_ult_gain: float = 50.0          # 궁극기 게이지 (최대 100)
+@export var counter_sweep_reach: float = 95.0    # 근접 반격 성공의 올려 베기: 앞쪽으로 닿는 거리 (평타 약 70보다 조금 넓게)
+@export var counter_sweep_half_height: float = 60.0
+@export var counter_path_damage: int = 20        # 원거리 반격 X자가 되돌아가는 길에 있던 적 피해 (임시 2N)
+@export var counter_path_width: float = 40.0     # 그 길의 판정 폭 (선에서 이 거리 안)
 
 @export_group("Skill Slots")
 ## 입력 슬롯마다 장착한 스킬 이름. 스킬 키(E)를 누를 때 아래(S/↓) > 위(W/↑) > 기본 순으로 슬롯을 고른다.
@@ -1152,50 +1160,80 @@ func _start_parry() -> void:
 	_action_time = 0.0
 	velocity.x = move_toward(velocity.x, 0.0, run_speed)
 	_squash = Vector2(0.86, 1.14)
+	# 방향 전환과 반격을 동시에 눌러도 된다 — 누른 쪽을 먼저 바라본 뒤 판정한다.
+	var dir := _move_input()
+	if absf(dir) > 0.01:
+		facing = signf(dir)
 
+	# 한 번의 입력은 대상 하나만 받아친다 (동시에 뜬 두 공격은 따로 눌러야 한다).
 	var targets := _glinting_attackers()
 	if targets.is_empty():
-		# 반짝이는 근접 공격이 없으면, 열려 있는 카유공을 방향 무관하게 받아친다.
+		# 바라보는 쪽에 반짝이는 근접 공격이 없으면, 열려 있는 카유공을 방향 무관하게 받아친다.
 		var threats := _open_counter_threats()
 		if not threats.is_empty():
-			_start_counter(threats)
+			_start_counter([_nearest(threats)])
 			return
 		# 헛반격 — 반짝이지 않을 때 눌렀다. 경직 + 재사용 대기, 무적 없음.
 		_parry_success = false
 		_parry_cd = parry_whiff_cooldown
-		var dir := _move_input()
-		if absf(dir) > 0.01:
-			facing = signf(dir)
 		visual.play(&"parry")
 		_set_flash(Color(0.55, 0.7, 0.9), 0.35)
 		_sfx(sfx_whiff, 0.05)
 		_spawn_parry_stance(false)
 		return
 
+	var target := _nearest(targets)
 	_parry_success = true
 	_parry_cd = 0.0                   # 성공하면 바로 다음 공격(연격)도 받아칠 수 있다
 	_open_chain()
-	facing = signf(targets[0].global_position.x - global_position.x)
-	if facing == 0.0:
-		facing = 1.0
 	hurtbox.invincible = true
 	visual.play(&"parry_success")
 	_spawn_parry_stance(true)
-	_trigger_parry_success(targets)
+	_trigger_parry_success([target])
+	_counter_sweep()
 	_check_haki()
 
 
-## ParryBox 안에서 지금 반짝이고 있는(= 반격 가능한) 적들.
+## ParryBox 안에서 지금 반짝이고 있는(= 반격 가능한) 적 중 바라보는 쪽에 있는 적들.
+## 방향키를 누르고 있으면 그쪽을 바라보는 것으로 친다 (돌아서며 반격).
 func _glinting_attackers() -> Array[Enemy]:
+	var look := facing
+	if absf(_move_input()) > 0.01:
+		look = signf(_move_input())
 	var found: Array[Enemy] = []
 	for area in parry_box.get_overlapping_areas():
 		var hb := area as HitboxComponent
 		if hb == null:
 			continue
 		var enemy := hb.source as Enemy
-		if enemy != null and enemy.is_glinting() and not found.has(enemy):
+		if enemy == null or not enemy.is_glinting() or found.has(enemy):
+			continue
+		var dx := enemy.global_position.x - global_position.x
+		if signf(dx) == look or absf(dx) < 16.0:
 			found.append(enemy)
 	return found
+
+
+func _nearest(enemies: Array[Enemy]) -> Enemy:
+	var best: Enemy = enemies[0]
+	for e in enemies:
+		if e.global_position.distance_squared_to(global_position) < best.global_position.distance_squared_to(global_position):
+			best = e
+	return best
+
+
+## 근접 반격 성공의 올려 베기 — 앞쪽 범위 안의 일반 적("field_mob")을 모두 기절시킨다 (피해 없음).
+## 다른 반짝이는 공격은 건드리지 않는다: 그건 따로 받아쳐야 한다. 보스는 휘말리지 않는다 (기절 저항).
+func _counter_sweep() -> void:
+	var origin := global_position + Vector2(0.0, -8.0)
+	for n in get_tree().get_nodes_in_group("field_mob"):
+		var enemy := n as Enemy
+		if enemy == null or enemy.state == Enemy.State.DEAD or enemy.is_glinting():
+			continue
+		var d := enemy.hurtbox.global_position - origin
+		if d.x * facing >= -16.0 and d.x * facing <= counter_sweep_reach and absf(d.y) <= counter_sweep_half_height:
+			enemy.on_parried(global_position)
+	_spawn_slash(-75.0, 1.35)             # 위로 크게 올려 베는 칼빛
 
 
 ## 카유공 창이 열려 있는 적들 (방향·거리 무관).
@@ -1233,7 +1271,24 @@ func _start_counter(threats: Array[Enemy]) -> void:
 		enemy.on_countered(global_position)
 		if dmg > 0:
 			_spawn_counter_slash(enemy, dmg)
+		_strike_counter_path(enemy)
 	_check_haki()
+
+
+## 원거리 반격의 X자가 발사자에게 되돌아가는 길(플레이어 → 발사자 직선) 위에 있던 다른 적에게도 피해를 준다.
+func _strike_counter_path(shooter: Enemy) -> void:
+	var a := global_position + Vector2(0.0, -8.0)
+	var b := shooter.global_position
+	for n in get_tree().get_nodes_in_group("enemy"):
+		var enemy := n as Enemy
+		if enemy == null or enemy == shooter or enemy.state == Enemy.State.DEAD:
+			continue
+		var p := enemy.hurtbox.global_position
+		var closest := Geometry2D.get_closest_point_to_segment(p, a, b)
+		if p.distance_to(closest) <= counter_path_width:
+			var push := (b - a).normalized() * 160.0
+			if enemy.hurtbox.receive_hit(counter_path_damage, self, push):
+				_spawn_spark(p, Color(0.8, 0.5, 1.0, 1.0), 8, 360.0, 0.0, 40.0)
 
 
 func _spawn_counter_slash(enemy: Enemy, dmg: int) -> void:
