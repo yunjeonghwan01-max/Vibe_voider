@@ -1,49 +1,48 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene format=3 uid="uid://devo5ottepqj7"]
 
-[ext_resource type="Script" path="res://actors/player/abilities/void_orb/void_orb_projectile.gd" id="1_proj"]
-[ext_resource type="Texture2D" path="res://assets/temporary/effects/void_orb.png" id="2_orb"]
-[ext_resource type="Script" path="res://combat/components/hitbox/hitbox.gd" id="3_hit"]
-[ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="4_spark"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/orb_hit.wav" id="a_hit"]
+[ext_resource type="Script" uid="uid://06m6lmdee7en" path="res://actors/player/abilities/void_orb/void_orb_projectile.gd" id="1_proj"]
+[ext_resource type="Texture2D" uid="uid://dc03k14heil8u" path="res://assets/temporary/effects/void_orb.png" id="2_orb"]
+[ext_resource type="Script" uid="uid://ccskgv0c6im1v" path="res://combat/components/hitbox/hitbox.gd" id="3_hit"]
+[ext_resource type="PackedScene" uid="uid://cgygv5hooem53" path="res://combat/effects/spark/spark.tscn" id="4_spark"]
+[ext_resource type="AudioStream" uid="uid://cgcv6p0nhpcjc" path="res://assets/temporary/audio/orb_hit.wav" id="a_hit"]
 
 [sub_resource type="CircleShape2D" id="Circ_hit"]
 radius = 38.0
 
 [sub_resource type="CircleShape2D" id="Circ_wall"]
-radius = 10.0
 
-[node name="VoidOrbProjectile" type="Node2D"]
+[node name="VoidOrbProjectile" type="Node2D" unique_id=20615307]
 z_index = 5
+scale = Vector2(2.4, 2.4)
 script = ExtResource("1_proj")
 spark_scene = ExtResource("4_spark")
 
-[node name="Visual" type="Node2D" parent="."]
+[node name="Visual" type="Node2D" parent="." unique_id=613487674]
 
-[node name="Sprite2D" type="Sprite2D" parent="Visual"]
+[node name="Sprite2D" type="Sprite2D" parent="Visual" unique_id=1437708724]
 scale = Vector2(2, 2)
 texture = ExtResource("2_orb")
 hframes = 4
 
-[node name="Hitbox" type="Area2D" parent="."]
+[node name="Hitbox" type="Area2D" parent="." unique_id=1365021777]
 collision_layer = 32
 collision_mask = 16
 script = ExtResource("3_hit")
 damage = 7
 apply_on_contact = false
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Hitbox" unique_id=388936583]
 shape = SubResource("Circ_hit")
 
-[node name="Collision" type="Area2D" parent="."]
+[node name="Collision" type="Area2D" parent="." unique_id=1087312140]
 collision_layer = 0
-collision_mask = 1
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Collision"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Collision" unique_id=1938213207]
 shape = SubResource("Circ_wall")
 
-[node name="Audio" type="Node2D" parent="."]
+[node name="Audio" type="Node2D" parent="." unique_id=870820172]
 
-[node name="Hit" type="AudioStreamPlayer2D" parent="Audio"]
+[node name="Hit" type="AudioStreamPlayer2D" parent="Audio" unique_id=700978558]
 stream = ExtResource("a_hit")
 volume_db = -4.0
 max_polyphony = 4
