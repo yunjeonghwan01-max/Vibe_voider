@@ -4,7 +4,7 @@ extends CharacterBody2D
 ## 떠돌이 검사(검은 고양이). 빠르고 반응 좋은 이동 + 근접 전투의 핵심.
 ##
 ## 이동:  달리기(가감속) / 점프(코요테 타임 + 점프 버퍼 + 가변 높이) / 더블 점프(공중 1회) / 대시(무적·잔상)
-## 전투:  3연속 참격 콤보 / 반격(패링) / 스킬(E: 장풍, 대시+E: 대시 참격, 위+E: 벼락) / 궁극기(전투로 충전, 수동 발동 — 월아 참격)
+## 전투:  3연속 참격 콤보 / 반격(패링) / 슬롯 스킬(E: 기본·위·아래·대시 중 슬롯 — 장착은 slot_* 속성) / 궁극기(전투로 충전, 수동 발동)
 ##
 ## 반격 규칙: 적이 공격 직전 0.4초 동안 금빛으로 "반짝"인다. 그 순간 반격 키를 눌러야만 성공한다.
 ##   - 카유공(감시자의 + 섬광, 0.4초): 바라보는 방향과 무관하게 반격 키로 받아친다 → X자 참격으로 즉사.
@@ -72,6 +72,15 @@ enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SL
 @export var haki_every: int = 3                  # 연쇄 반격이 이만큼 이어질 때마다 패기 방출
 @export var haki_damage: int = 15                # 평타 1타(10)의 1.5배
 @export var haki_ult_gain: float = 50.0          # 궁극기 게이지 (최대 100)
+
+@export_group("Skill Slots")
+## 입력 슬롯마다 장착한 스킬 이름. 스킬 키(E)를 누를 때 아래(S/↓) > 위(W/↑) > 기본 순으로 슬롯을 고른다.
+## 대쉬 슬롯은 대쉬 중(과 직후 유예 시간)의 E — 방향키보다 우선한다. "none" = 비어 있음.
+@export_enum("none", "void_orb", "lightning", "rising_slash") var slot_neutral: String = "void_orb"
+@export_enum("none", "void_orb", "lightning", "rising_slash") var slot_up: String = "lightning"
+@export_enum("none", "void_orb", "lightning", "rising_slash") var slot_down: String = "rising_slash"
+@export_enum("none", "dash_slash") var slot_dash: String = "dash_slash"
+@export_enum("none", "moon_slash") var slot_ultimate: String = "moon_slash"
 
 @export_group("Skill")
 @export var skill_windup: float = 0.06         # 손을 내지르는 순간 발사
@@ -304,32 +313,23 @@ func _tick_timers(delta: float) -> void:
 func _process_free(delta: float) -> void:
 	# 액션 입력 우선순위: 궁극기 > 반격 > (대시+스킬 동시 = 대시 참격) > 스킬 > 대시 > 공격 > 점프
 	# (반격은 타이밍이 생명이라 다른 입력에 밀리지 않게 앞에 둔다)
-	if Input.is_action_just_pressed("player_ultimate") and is_ultimate_ready():
+	if Input.is_action_just_pressed("player_ultimate") and _can_ultimate():
 		_start_ultimate()
 		return
 	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
 		_start_parry()
 		return
 	if Input.is_action_just_pressed("player_dash") and Input.is_action_just_pressed("player_skill") \
-			and _can_dash() and dash_slash.can_use():
+			and _can_dash() and _dash_slot_ready():
 		_start_dash()                    # 같은 프레임의 E는 _start_dash가 대시 참격으로 예약한다
 		return
-	# 대시가 막 끝난 유예 시간 안의 E는 (위를 누르고 있어도) 대시 참격 — 대시 중과 같은 규칙
-	if Input.is_action_just_pressed("player_skill") and _dash_slash_window > 0.0 and dash_slash.can_use():
+	# 대시가 막 끝난 유예 시간 안의 E는 (방향키를 누르고 있어도) 대시 슬롯 — 대시 중과 같은 규칙
+	if Input.is_action_just_pressed("player_skill") and _dash_slash_window > 0.0 and _dash_slot_ready():
 		_start_dash_slash()
 		return
-	# 위(W/↑)를 누른 채 E = 벼락. 쿨다운 중이면 아무것도 나가지 않는다 (장풍으로 새지 않게).
-	# 아래(S/↓)를 누른 채 E = 승천 참격. 쿨다운 중이면 아무것도 나가지 않는다.
-	if Input.is_action_just_pressed("player_skill") and _down_held():
-		if rising_slash.can_use():
-			_start_rising_slash()
-			return
-	elif Input.is_action_just_pressed("player_skill") and _up_held():
-		if lightning.can_cast():
-			_start_lightning()
-			return
-	elif Input.is_action_just_pressed("player_skill") and void_orb.can_cast():
-		_start_skill()
+	# 누른 방향의 슬롯 스킬. 쿨다운 중이면 아무것도 나가지 않는다 (다른 슬롯으로 새지 않게).
+	if Input.is_action_just_pressed("player_skill") and _can_cast_skill(_held_skill_slot()):
+		_cast_skill(_held_skill_slot())
 		return
 	if Input.is_action_just_pressed("player_dash") and _can_dash():
 		_start_dash()
@@ -344,6 +344,44 @@ func _process_free(delta: float) -> void:
 
 	_apply_horizontal(delta, _move_input(), true)
 	_apply_gravity(delta)
+
+
+## 지금 누른 방향의 스킬 슬롯 (대시 슬롯은 대시 쪽에서 따로 다룬다).
+func _held_skill_slot() -> String:
+	if _down_held():
+		return slot_down
+	if _up_held():
+		return slot_up
+	return slot_neutral
+
+
+func _can_cast_skill(skill: String) -> bool:
+	match skill:
+		"void_orb":
+			return void_orb.can_cast()
+		"lightning":
+			return lightning.can_cast()
+		"rising_slash":
+			return rising_slash.can_use()
+	return false
+
+
+func _cast_skill(skill: String) -> void:
+	match skill:
+		"void_orb":
+			_start_skill()
+		"lightning":
+			_start_lightning()
+		"rising_slash":
+			_start_rising_slash()
+
+
+func _dash_slot_ready() -> bool:
+	return slot_dash == "dash_slash" and dash_slash.can_use()
+
+
+func _can_ultimate() -> bool:
+	return slot_ultimate == "moon_slash" and is_ultimate_ready()
 
 
 func _up_held() -> bool:
@@ -461,7 +499,7 @@ func _process_dash(delta: float) -> void:
 	if _action_time >= dash_time:
 		var queued := _dash_slash_queued
 		_end_dash()
-		if queued and dash_slash.can_use():
+		if queued and _dash_slot_ready():
 			_start_dash_slash()
 		else:
 			_dash_slash_window = dash_slash_grace   # 대시를 끝까지 탔으면 잠깐 더 받아준다
@@ -533,17 +571,12 @@ func _process_attack(delta: float) -> void:
 		_end_attack()
 		_start_dash()
 		return
-	# 판정이 끝난 뒤(후딜)에는 장풍/벼락으로 이어 쓸 수 있다 — 베고 바로 쏘는 콤보
-	if _action_time >= active_end and Input.is_action_just_pressed("player_skill"):
-		if _up_held():
-			if lightning.can_cast():
-				_end_attack()
-				_start_lightning()
-				return
-		elif void_orb.can_cast():
-			_end_attack()
-			_start_skill()
-			return
+	# 판정이 끝난 뒤(후딜)에는 슬롯 스킬로 이어 쓸 수 있다 — 베고 바로 쏘는 콤보
+	if _action_time >= active_end and Input.is_action_just_pressed("player_skill") \
+			and _can_cast_skill(_held_skill_slot()):
+		_end_attack()
+		_cast_skill(_held_skill_slot())
+		return
 
 	var total := swing_windup + swing_active + swing_recovery
 	if _action_time >= total:
@@ -602,7 +635,7 @@ func _process_skill(delta: float) -> void:
 		velocity.y = 0.0
 
 	# 쏘기 직전에 대시가 들어오면 "E와 대시를 거의 동시에" 누른 것 → 장풍 대신 대시 참격
-	if not _skill_fired and Input.is_action_just_pressed("player_dash") and _can_dash() and dash_slash.can_use():
+	if not _skill_fired and Input.is_action_just_pressed("player_dash") and _can_dash() and _dash_slot_ready():
 		_start_dash()
 		_queue_dash_slash()
 		return
@@ -723,7 +756,7 @@ func _on_lightning_hit(_hurt: HurtboxComponent) -> void:
 
 # ─────────────────────────── 스킬: 대시 참격 ───────────────────────────
 func _queue_dash_slash() -> void:
-	if _dash_slash_queued or not dash_slash.can_use():
+	if _dash_slash_queued or not _dash_slot_ready():
 		return
 	_dash_slash_queued = true
 	_set_flash(Color(0.9, 0.8, 1.0), 0.55)   # 예약됐다는 작은 신호
