@@ -107,6 +107,8 @@ func _physics_process(delta: float) -> void:
 		_glint_t += delta
 	match state:
 		State.DEAD:
+			if is_on_floor():
+				velocity.x = move_toward(velocity.x, 0.0, move_speed * 6.0 * delta)   # 시체는 미끄러지지 않고 멈춘다
 			_apply_gravity(delta)
 		State.SPAWNING:
 			_state_timer -= delta
