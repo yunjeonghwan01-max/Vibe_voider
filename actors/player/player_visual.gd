@@ -21,6 +21,8 @@ const KEYS := {
 	&"dash_slash": [[0.0, 168.0], [0.03, 176.0], [0.12, -4.0], [0.28, 8.0]],
 	&"cast_up": [[0.0, -30.0], [0.06, -105.0], [0.15, -92.0], [0.35, -86.0]],
 	&"ult_cast": [[0.0, -120.0], [0.12, -178.0], [0.2, 40.0], [0.5, 28.0]],
+	&"ult_charge": [[0.0, -120.0], [0.15, -178.0]],
+	&"ult_release": [[0.0, -178.0], [0.08, 40.0], [0.36, 28.0]],
 	&"dash": [[0.0, 120.0], [0.06, 172.0]],
 	&"spin_rise": [[0.0, 30.0], [0.1, -95.0]],
 	&"dive": [[0.0, 30.0], [0.1, -100.0], [0.22, -90.0]],
@@ -119,6 +121,11 @@ func tick(delta: float, vel: Vector2, on_floor: bool, run_speed: float) -> void:
 			target = _keyed(KEYS[anim], _t)
 			snap = true
 			frame_i = Frame.DASH if _t >= 0.12 and _t < 0.32 else Frame.IDLE
+		&"ult_release":
+			# 검격 날리기: 치켜들었던 검을 앞으로 크게 내려 벤다
+			target = _keyed(KEYS[anim], _t)
+			snap = true
+			frame_i = Frame.DASH if _t < 0.2 else Frame.IDLE
 		&"dash":
 			target = _keyed(KEYS[anim], _t)
 			snap = true

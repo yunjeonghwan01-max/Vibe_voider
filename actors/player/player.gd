@@ -82,7 +82,7 @@ enum DivePhase { HOP, HANG, FALL, LAND }
 @export_enum("none", "void_orb", "spin_rise", "dive", "lightning", "rising_slash") var slot_up: String = "spin_rise"
 @export_enum("none", "void_orb", "spin_rise", "dive", "lightning", "rising_slash") var slot_down: String = "dive"
 @export_enum("none", "dash_slash") var slot_dash: String = "dash_slash"
-@export_enum("none", "moon_slash") var slot_ultimate: String = "moon_slash"
+@export_enum("none", "sword_wave", "moon_slash") var slot_ultimate: String = "sword_wave"
 
 @export_group("Skill")
 @export var skill_windup: float = 0.06         # 손을 내지르는 순간 발사
@@ -141,6 +141,17 @@ enum DivePhase { HOP, HANG, FALL, LAND }
 @export var ult_burst_damage: int = 40         # 반달 참격 폭발 (평타 1타의 4배)
 @export var ult_max_distance: float = 1500.0
 @export var moon_slash_scene: PackedScene
+
+@export_group("Sword Wave")
+@export var sword_wave_windup: float = 0.6       # 검을 치켜들고 힘을 모으는 긴 시전 (무적, 공중이면 떠 있다)
+@export var sword_wave_recovery: float = 0.36    # 날린 뒤 자세가 풀리기까지
+@export var sword_wave_explosion_damage: int = 50   # 첫 적·벽에 닿은 원형 폭발 (임시 5N)
+@export var sword_wave_explosion_radius: float = 220.0
+@export var sword_wave_explosion_knockback: float = 0.0
+@export var sword_wave_mark_damage: int = 10     # 표식 하나가 터질 때 (임시 1N)
+@export var sword_wave_mark_radius: float = 140.0
+@export var sword_wave_mark_delay: float = 2.0
+@export var sword_wave_scene: PackedScene
 
 @export_group("Scenes")
 @export var slash_scene: PackedScene
@@ -427,7 +438,16 @@ func _dash_slot_ready() -> bool:
 
 
 func _can_ultimate() -> bool:
-	return slot_ultimate == "moon_slash" and is_ultimate_ready()
+	return slot_ultimate != "none" and is_ultimate_ready()
+
+
+## 장착한 궁극기의 시전(발사까지) 시간 / 전체 시간.
+func _ult_windup() -> float:
+	return sword_wave_windup if slot_ultimate == "sword_wave" else ult_windup
+
+
+func _ult_total() -> float:
+	return sword_wave_windup + sword_wave_recovery if slot_ultimate == "sword_wave" else ult_time
 
 
 func _up_held() -> bool:
@@ -1348,7 +1368,7 @@ func _start_ultimate() -> void:
 	GameFeel.shake(0.3)
 	_sfx(sfx_ult_cast, 0.0)
 	_set_flash(Color(0.85, 0.65, 1.0), 0.8)
-	visual.play(&"ult_cast")
+	visual.play(&"ult_charge" if slot_ultimate == "sword_wave" else &"ult_cast")
 	_spawn_parry_spark(global_position + Vector2(facing * 10.0, -40.0), 0.8)
 
 
@@ -1357,11 +1377,16 @@ func _process_ultimate(delta: float) -> void:
 	velocity.x = move_toward(velocity.x, 0.0, 1600.0 * delta)
 	if not _hitbox_live:
 		velocity.y = 0.0                 # 발사할 때까지 공중에서도 떠 있다
-		if _action_time >= ult_windup:
-			_fire_moon_slash()
+		if slot_ultimate == "sword_wave":
+			_sword_wave_charge_fx(delta)
+		if _action_time >= _ult_windup():
+			if slot_ultimate == "sword_wave":
+				_fire_sword_wave()
+			else:
+				_fire_moon_slash()
 	else:
 		_apply_gravity(delta)
-	if _action_time >= ult_time:
+	if _action_time >= _ult_total():
 		hurtbox.invincible = false
 		action = Action.NONE
 		visual.play(&"locomotion")
@@ -1384,6 +1409,41 @@ func _fire_moon_slash() -> void:
 	m.max_distance = ult_max_distance
 	_fx_parent().add_child(m)
 	m.global_position = global_position + Vector2(facing * 20.0, -8.0)
+
+
+## 검격 날리기 시전: 치켜든 검끝으로 보랏빛이 빨려 들고, 몸이 점점 거세게 떨린다.
+func _sword_wave_charge_fx(delta: float) -> void:
+	var k := clampf(_action_time / maxf(sword_wave_windup, 0.01), 0.0, 1.0)
+	_squash = Vector2(0.86 + 0.03 * sin(_action_time * 80.0) * k, 1.16)
+	if fmod(_action_time, 0.1) < delta:
+		var tip := global_position + Vector2(-facing * 18.0, -58.0)
+		_spawn_spark(tip, Color(0.8, 0.55, 1.0, 1.0), 4 + int(6.0 * k), 360.0, 0.0, 26.0 + 30.0 * k)
+		_set_flash(Color(0.75, 0.5, 1.0), 0.3 + 0.5 * k)
+
+
+func _fire_sword_wave() -> void:
+	_hitbox_live = true
+	velocity.x = -facing * 180.0         # 내려 베는 반동
+	_squash = Vector2(1.4, 0.72)
+	visual.play(&"ult_release")
+	GameFeel.hit_stop(0.06)
+	GameFeel.shake(0.7)
+	GameFeel.flash(Color(0.7, 0.4, 1.0), 0.3, 0.2)
+	_sfx(sfx_ult_hit, 0.0)
+	_spawn_slash(0.0, 2.4)
+	if sword_wave_scene == null:
+		return
+	var w := sword_wave_scene.instantiate() as SwordWave
+	w.source = self
+	w.direction = facing
+	w.explosion_damage = sword_wave_explosion_damage
+	w.explosion_radius = sword_wave_explosion_radius
+	w.explosion_knockback = sword_wave_explosion_knockback
+	w.mark_damage = sword_wave_mark_damage
+	w.mark_radius = sword_wave_mark_radius
+	w.mark_delay = sword_wave_mark_delay
+	_fx_parent().add_child(w)
+	w.global_position = global_position + Vector2(facing * 20.0, -8.0)
 
 
 # ─────────────────────────── 피격 / 사망 ───────────────────────────

@@ -24,6 +24,7 @@
 [ext_resource type="Script" path="res://actors/player/abilities/dive/dive_ability.gd" id="21_dive"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/dive/dive_blast.tscn" id="22_dive_blast"]
 [ext_resource type="PackedScene" path="res://combat/effects/ground_impact/ground_impact.tscn" id="23_impact"]
+[ext_resource type="PackedScene" path="res://actors/player/abilities/sword_wave/sword_wave.tscn" id="24_wave"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/haki/haki_burst.tscn" id="16_haki"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/moon_slash/moon_slash.tscn" id="17_moon"]
 [ext_resource type="AudioStream" uid="uid://cnlltvsiboews" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
@@ -90,6 +91,7 @@ afterimage_scene = ExtResource("8_after")
 counter_slash_scene = ExtResource("13_counter")
 haki_scene = ExtResource("16_haki")
 moon_slash_scene = ExtResource("17_moon")
+sword_wave_scene = ExtResource("24_wave")
 
 [node name="Visual" type="Node2D" parent="." unique_id=1009679064]
 material = SubResource("Mat_flash")

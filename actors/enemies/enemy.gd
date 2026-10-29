@@ -20,6 +20,7 @@ enum State { SPAWNING, ACTIVE, HITSTUN, STAGGER, DEAD, CARRIED }
 
 const GLINT_COLOR := Color(1.0, 0.93, 0.58)
 const HIT_COLOR := Color(1.0, 0.42, 0.42)
+const NO_FLINCH_GROUP := &"no_flinch"   # 이 그룹의 source가 준 피해는 넉백·경직 없이 피해만 받는다
 const STAGGER_COLOR := Color(0.45, 0.9, 1.0)
 const LAUNCH_THRESHOLD := -400.0   # 이보다 강한 위쪽 넉백 = 띄우기
 const MAX_AIRBORNE := 1.4
@@ -69,6 +70,7 @@ var _flash_amount: float = 0.0
 var _flash_col: Color = Color.WHITE
 var _carrier: Node2D = null          # 휩쓸려 함께 움직이는 대상 (State.CARRIED)
 var _carry_offset: Vector2 = Vector2.ZERO
+var _corpse_hold_ms: int = 0          # 죽어도 이 시각(ms)까지 시체를 남긴다 (궁극기 표식 등)
 var _airborne: bool = false
 var _air_t: float = 0.0
 var _contact_area: Area2D = null
@@ -343,6 +345,8 @@ func _on_hit_received(_damage: int, source: Node, knockback: Vector2) -> void:
 		# 휩쓸린 동안은 위치를 기술이 정한다 — 번쩍임과 찌그러짐만.
 		visual.scale = Vector2(1.18 * signf(facing), 0.84)
 		return
+	if source != null and source.is_in_group(NO_FLINCH_GROUP):
+		return                           # 피해만 주는 공격 (궁극기 표식 폭발 등) — 번쩍임 외에 반응 없음
 	var armored := _has_armor() and state == State.ACTIVE
 	var resist := 0.85 if armored else knockback_resist
 	if knockback != Vector2.ZERO:
@@ -414,6 +418,22 @@ func _on_died() -> void:
 	GameFeel.hit_stop(0.08)
 	GameFeel.shake(0.35)
 	_sfx(sfx_death, 0.08)
+	_dissolve_after_hold()
+
+
+## 죽어도 seconds초 동안 시체를 남긴다 (여러 번 부르면 가장 늦은 시각까지). 쓰는 쪽: 궁극기 표식.
+func hold_corpse(seconds: float) -> void:
+	_corpse_hold_ms = maxi(_corpse_hold_ms, Time.get_ticks_msec() + int(seconds * 1000.0))
+
+
+func _dissolve_after_hold() -> void:
+	var wait := float(_corpse_hold_ms - Time.get_ticks_msec()) / 1000.0
+	if wait > 0.0:
+		visual.modulate = Color(0.55, 0.5, 0.65, 1.0)   # 표식이 터질 때까지 잿빛 시체로 남는다
+		await get_tree().create_timer(wait, false).timeout
+		if not is_instance_valid(self):
+			return
+		visual.modulate = Color.WHITE
 	_die_dissolve()
 
 
