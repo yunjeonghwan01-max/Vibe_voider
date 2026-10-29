@@ -17,7 +17,7 @@ extends Enemy
 ##      안 열리면 X자 문장 없이 짧게 맞부딪힌 뒤 곧장 내려찍기 — 무엇을 눌러도 소용없다.
 ##      열리면 그 창에서 역반격에 성공했을 때 보스가 다시 받아칠지(_bait_rally)를 미리 굴려 X자 색으로 보여 준다
 ##      (금·은 = 무너진다, 푸른빛 = 다시 받아친다). 확률은 입력 전에 정해지므로 성공한 입력의 결과를 뒤집지 않는다.
-##      다시 받아치면 다음 공방(새 창 굴림)으로 이어지고, 역반격이 오갈 때마다 보스의 재대응 확률이 오른다(rally_max에서 끝).
+##      다시 받아치면 다음 공방으로 이어진다 — 이때의 창은 확률 없이 항상 열린다. 역반격이 오갈 때마다 보스의 재대응 확률이 오른다(rally_max에서 끝).
 ##   4. 돌진 (RUSH, 쿨타임 12초) — 바닥 끝으로 미끄러져 물러난 뒤 웅크려 힘을 모으고(붉은 경로선),
 ##      가속하며 바닥 전체를 돌진한다. 플레이어와 아주 가까워지는 순간만 아주 짧게(0.15초) 반짝인다 —
 ##      그때 반격하면 긴 스턴. 반대쪽 벽에 부딪히면 벽이 깨진다.
@@ -642,7 +642,8 @@ func _clash() -> void:
 		s.with_ring(GUARD_COLOR, 110.0)
 	_atk = Atk.BAIT
 	velocity = Vector2.ZERO
-	_bait_open = randf() < recounter_open_chance
+	# 첫 맞부딪힘만 굴린다 — 랠리로 다시 받아친 공격은 항상 받아칠 수 있다
+	_bait_open = _rally_count > 0 or randf() < recounter_open_chance
 	if not _bait_open:
 		_bait_rally = false
 		GameFeel.hit_stop(closed_clash_time, 0.05)
