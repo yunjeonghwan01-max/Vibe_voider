@@ -3,8 +3,9 @@ extends Node2D
 
 ## 장풍(공허 구체). 빠르게 일직선으로 날아가며 적을 관통한다.
 ## 다단히트: 같은 적과 겹쳐 있는 동안 hit_interval마다 다시 때린다 (적마다 최대 max_hits_per_target).
-## 맞을 때마다 진행 방향으로 살짝 밀어낸다 (할로우나이트식 짧은 넉백).
-## 벽(world)에 닿거나 사거리를 다 날면 흩어진다. 한쪽으로만 막히는 발판은 그냥 지나간다.
+## 적마다 첫 타는 first_knockback으로 크게 밀어내고, 이후 타는 knockback_per_hit으로 살짝 민다.
+## 벽(world)에 닿거나 카메라 화면 끝(진행 방향)에 닿으면 흩어진다 (max_distance는 안전장치).
+## 한쪽으로만 막히는 발판은 그냥 지나간다.
 ##
 ## Hitbox는 apply_on_contact = false — 대상별 타이밍/데미지는 여기서 receive_hit()으로 직접 정한다.
 
@@ -16,6 +17,7 @@ signal hit_landed(hurtbox: HurtboxComponent)
 @export var max_hits_per_target: int = 3
 @export var hit_interval: float = 0.03       # 빠른 구체라 짧게 — 스치는 동안 3타가 들어가게
 @export var knockback_per_hit: float = 60.0
+@export var first_knockback: float = 420.0   # 적마다 첫 타의 큰 넉백
 @export var fade_time: float = 0.16
 @export var spark_scene: PackedScene
 
@@ -62,7 +64,7 @@ func _physics_process(delta: float) -> void:
 	global_position.x += direction * step
 	_travelled += step
 	_tick_multi_hits()
-	if _travelled >= max_distance:
+	if _travelled >= max_distance or _past_screen_edge():
 		_dissipate()
 
 	_pulse = maxf(_pulse - delta * 8.0, 0.0)
@@ -95,7 +97,8 @@ func _tick_multi_hits() -> void:
 
 func _try_hit(hurt: HurtboxComponent) -> void:
 	var rec: Dictionary = _targets[hurt]
-	var kb := Vector2(direction, -0.12).normalized() * knockback_per_hit
+	var force := first_knockback if int(rec["hits"]) == 0 else knockback_per_hit
+	var kb := Vector2(direction, -0.12).normalized() * force
 	# 무적(등장 중 등)이면 성립하지 않는다 → 횟수를 쓰지 않고 다음 프레임에 다시 시도
 	if not hurt.receive_hit(damage_per_hit, source, kb):
 		return
@@ -118,6 +121,14 @@ func _on_hit(hurt: HurtboxComponent, first: bool) -> void:
 
 
 # ─────────────────────────── 벽 / 소멸 ───────────────────────────
+## 구체 중심이 카메라 화면의 진행 방향 끝을 넘었는가 (카메라가 따라 움직여도 그 순간의 화면 기준).
+func _past_screen_edge() -> bool:
+	var inv := get_viewport().get_canvas_transform().affine_inverse()
+	var a := inv * Vector2.ZERO
+	var b := inv * get_viewport().get_visible_rect().size
+	var x := global_position.x
+	return x > maxf(a.x, b.x) if direction > 0.0 else x < minf(a.x, b.x)
+
 func _on_body_shape_entered(_rid: RID, body: Node2D, body_shape_index: int, _local_shape_index: int) -> void:
 	var co := body as CollisionObject2D
 	if co != null:

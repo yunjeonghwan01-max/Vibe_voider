@@ -14,9 +14,10 @@ signal ready_again                       # 쿨다운이 끝난 순간 (플레이
 @export var damage_per_hit: int = 7
 @export var max_hits_per_target: int = 3
 @export var knockback_per_hit: float = 60.0
+@export var first_knockback: float = 420.0
 @export var speed: float = 1725.0
 @export var max_distance: float = 950.0
-@export var spawn_offset: Vector2 = Vector2(34.0, -8.0)   # 오른쪽을 볼 때 기준, 좌우는 dir로 맞춘다
+@export var spawn_offset: Vector2 = Vector2(0.0, -8.0)    # 플레이어 몸 중심에서 발사 (오른쪽 기준, 좌우는 dir로 맞춘다)
 
 var _cd: float = 0.0
 
@@ -40,6 +41,7 @@ func cast(caster: Node2D, dir: float) -> void:
 	orb.damage_per_hit = damage_per_hit
 	orb.max_hits_per_target = max_hits_per_target
 	orb.knockback_per_hit = knockback_per_hit
+	orb.first_knockback = first_knockback
 	orb.speed = speed
 	orb.max_distance = max_distance
 	orb.hit_landed.connect(hit_landed.emit)

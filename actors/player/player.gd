@@ -634,6 +634,10 @@ func _process_skill(delta: float) -> void:
 	else:
 		velocity.y = 0.0
 
+	# 반격은 시전 어느 순간에도 끊고 들어간다 (쏘기 전이면 장풍은 나가지 않는다)
+	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+		_start_parry()
+		return
 	# 쏘기 직전에 대시가 들어오면 "E와 대시를 거의 동시에" 누른 것 → 장풍 대신 대시 참격
 	if not _skill_fired and Input.is_action_just_pressed("player_dash") and _can_dash() and _dash_slot_ready():
 		_start_dash()
@@ -642,11 +646,8 @@ func _process_skill(delta: float) -> void:
 	if not _skill_fired and _action_time >= skill_windup:
 		_fire_skill()
 
-	# 발사 후에는 대시/반격으로 끊을 수 있다
+	# 발사 후에는 대시로 끊을 수 있다
 	if _skill_fired:
-		if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
-			_start_parry()
-			return
 		if Input.is_action_just_pressed("player_dash") and _can_dash():
 			_start_dash()
 			return
@@ -765,6 +766,9 @@ func _queue_dash_slash() -> void:
 func _start_dash_slash() -> void:
 	action = Action.DASH_SLASH
 	_dash_slash_window = 0.0
+	# 대시 무적은 대시가 끝나는 순간까지 — 참격까지 이어지지 않는다 (대시 후 숨은 무적도 없앤다)
+	_dash_iframe_t = 0.0
+	hurtbox.invincible = false
 	_action_time = 0.0
 	_hitbox_live = false
 	velocity = Vector2(facing * dash_slash_lunge, 0.0)
@@ -804,12 +808,12 @@ func _process_dash_slash(delta: float) -> void:
 		dash_slash.set_active(false)
 		trail.visible = false
 
-	# 후딜에는 반격/평타로 이어갈 수 있다
+	# 반격은 참격 어느 순간에도 끊고 들어간다. 후딜에는 평타로도 이어갈 수 있다.
+	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
+		_end_dash_slash()
+		_start_parry()
+		return
 	if _action_time >= active_end:
-		if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
-			_end_dash_slash()
-			_start_parry()
-			return
 		if Input.is_action_just_pressed("player_attack"):
 			_end_dash_slash()
 			_start_attack(0)
