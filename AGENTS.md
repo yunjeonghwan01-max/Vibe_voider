@@ -60,6 +60,15 @@ Keep it concise, four parts only:
 Before adding or restructuring Godot scenes, scripts,
 or resources, read `docs/structure.md`.
 
+## Counter Terminology
+
+The human names the four counter types with these abbreviations. Use them in conversation, docs, and comments; when the human says one, map it to the right system (details in `docs/structure.md`, "카운터 종류").
+- **MCI** (Melee Counter Inducing) — melee glint parry: an enemy's 0.4s gold glint, ParryBox, must face the attacker.
+- **RCI** (Ranged Counter Inducing) — 카유공: charge → + flash window (0.4s), direction-free, punished by an X-slash finisher (Watcher beam, Knight sword wave).
+- **PRCI** (Projectile Ranged Counter Inducing) — erasing the Watcher's orb projectile in its ~0.1s pre-impact glow (`deflectable`), direction-free, no penalty to the shooter.
+- **CCI** (Chain Counter Inducing) — the re-counter used in the boss rally (Knight counter stance → 역반격 window → the boss may re-answer, repeated).
+Code identifiers do not use these names yet (e.g. `is_glinting`, `is_counter_open`, `is_deflectable`, `_bait_rally`).
+
 ## Communication
 
 Communicate with the user in Korean. Keep code, identifiers, and technical terminology in English.

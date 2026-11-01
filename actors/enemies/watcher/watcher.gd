@@ -3,7 +3,7 @@ extends Enemy
 
 ## 감시자 — 공중을 떠다니는 원거리 적 (공허의 외눈). 플레이어 위쪽 옆에서 거리를 두고 바늘을 쏜다.
 ##
-## 바늘: 조준(눈을 가늘게, 붉게) → 발사. 반격 불가, 피해야 한다 (WatcherNeedle 참고).
+## 바늘: 조준(눈을 가늘게, 붉게) → 발사. 몸에 닿기 직전 아주 짧게 빛날 때만 반격으로 지울 수 있다 (WatcherNeedle 참고).
 ## 카유공(카운터 유도 공격) — 일정 시간마다:
 ##   CHARGE  2초: 금빛 불빛 입자가 점점 빠르게 몸 중앙으로 모인다. 슈퍼아머.
 ##   WINDOW  0.4초: 몸에 거대한 + 모양 금빛 섬광. 이 동안 is_counter_open() = true.
@@ -200,6 +200,7 @@ func _fire_needle() -> void:
 	var n := needle_scene.instantiate() as WatcherNeedle
 	n.source = self
 	n.direction = (t.global_position - from).normalized()
+	n.target = t
 	_projectile_parent().add_child(n)
 	n.global_position = from + n.direction * 18.0
 	_shoot_anim = 0.15

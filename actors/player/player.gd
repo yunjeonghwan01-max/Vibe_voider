@@ -13,8 +13,10 @@ extends CharacterBody2D
 ##   - 카유공(감시자의 + 섬광, 0.4초): 바라보는 방향과 무관하게 반격 키로 받아친다 → X자 참격 결정타,
 ##     X자가 되돌아가는 길(플레이어 → 발사자)에 있던 적도 피해를 입는다.
 ##     단, 그 입력이 바라보는 쪽의 반짝이는 근접 공격 반격에 쓰였다면 카유공은 받아치지 못한다.
-##   - 연쇄 반격: 반격(근접/카유공)에 성공한 뒤 chain_window(0.2초) 안에 반격 키를 다시 누르면 "예약"된다.
-##     예약은 창이 끝날 때까지 유효해서, 그 사이 반짝임/카유공이 생기면 자동으로 받아친다.
+##   - 바늘 튕겨내기: 감시자의 바늘이 몸에 닿기 직전(≈0.1초) 금빛으로 살짝 빛날 때 반격 키 → 검으로 지운다.
+##     방향 무관, 근접 반짝임·카유공이 없을 때만 (우선순위 가장 낮음). 쏜 적에게는 아무 일도 없다.
+##   - 연쇄 반격: 반격(근접/카유공/바늘 튕겨내기)에 성공한 뒤 chain_window(0.2초) 안에 반격 키를 다시 누르면 "예약"된다.
+##     예약은 창이 끝날 때까지 유효해서, 그 사이 반짝임/카유공/빛나는 바늘이 생기면 자동으로 받아친다.
 ##     끝까지 받아칠 게 없으면 헛반격 없이 조용히 끝난다. 받아칠 때마다 창이 다시 열려 계속 이어갈 수 있다.
 ##     창은 게임 시간으로 재므로 반격 연출의 정지(hit-stop) 동안에는 줄지 않는다.
 ##   - 패기 방출: 연쇄 반격이 3연속(3, 6, 9...번째) 이어지면 패왕색 패기(HakiBurst)가 터져
@@ -82,6 +84,7 @@ enum DivePhase { HOP, HANG, FALL, LAND }
 @export var counter_sweep_half_height: float = 60.0
 @export var counter_path_damage: int = 20        # 원거리 반격 X자가 되돌아가는 길에 있던 적 피해 (임시 2N)
 @export var counter_path_width: float = 40.0     # 그 길의 판정 폭 (선에서 이 거리 안)
+@export var deflect_success_time: float = 0.16   # 바늘 튕겨내기 후 자세 유지(무적) — 반격 성공보다 짧다
 
 @export_group("Skill Slots")
 ## 입력 슬롯마다 장착한 스킬 이름. 스킬 키(E)를 누를 때 아래(S/↓) > 위(W/↑) > 기본 순으로 슬롯을 고른다.
@@ -287,7 +290,7 @@ func _process(delta: float) -> void:
 		_iframe_t -= delta
 		visual.modulate.a = 1.0 if _iframe_t <= 0.0 or int(_iframe_t * 16.0) % 2 == 0 else 0.3
 	# 보스의 역반격 창처럼 세상이 느려진 동안엔 물리 프레임이 드물다 — 그 사이의 반격 입력을 모아 둔다.
-	if Engine.time_scale < 1.0 and Input.is_action_just_pressed("player_parry") and _can_take_counter_press() 			and not _open_counter_threats().is_empty():
+	if Engine.time_scale < 1.0 and Input.is_action_just_pressed("player_parry") and _can_take_counter_press() 			and (not _open_counter_threats().is_empty() or not _deflectable_needles().is_empty()):
 		_counter_buffered = true
 	# 연쇄 반격 입력은 hit-stop(물리 정지) 중에도 놓치지 않도록 화면 프레임마다 읽는다.
 	if _chain_skip_press:
@@ -303,7 +306,7 @@ func _physics_process(delta: float) -> void:
 	_tick_chain(delta)
 	if _counter_buffered:
 		_counter_buffered = false
-		if _can_take_counter_press() and not _open_counter_threats().is_empty():
+		if _can_take_counter_press() and (not _open_counter_threats().is_empty() or not _deflectable_needles().is_empty()):
 			_start_parry()
 
 	match action:
@@ -1173,6 +1176,11 @@ func _start_parry() -> void:
 		if not threats.is_empty():
 			_start_counter([_nearest(threats)])
 			return
+		# 그것도 없으면, 몸에 닿기 직전인 바늘을 검으로 지운다 (방향 무관).
+		var needles := _deflectable_needles()
+		if not needles.is_empty():
+			_deflect_needle(_nearest_needle(needles))
+			return
 		# 헛반격 — 반짝이지 않을 때 눌렀다. 경직 + 재사용 대기, 무적 없음.
 		_parry_success = false
 		_parry_cd = parry_whiff_cooldown
@@ -1244,6 +1252,47 @@ func _open_counter_threats() -> Array[Enemy]:
 		if enemy != null and enemy.is_counter_open():
 			found.append(enemy)
 	return found
+
+
+## 지금 튕겨낼 수 있는(몸에 닿기 직전 빛나는) 바늘들.
+func _deflectable_needles() -> Array[WatcherNeedle]:
+	var found: Array[WatcherNeedle] = []
+	for n in get_tree().get_nodes_in_group("deflectable"):
+		var needle := n as WatcherNeedle
+		if needle != null and needle.is_deflectable():
+			found.append(needle)
+	return found
+
+
+func _nearest_needle(needles: Array[WatcherNeedle]) -> WatcherNeedle:
+	var best: WatcherNeedle = needles[0]
+	for nd in needles:
+		if nd.global_position.distance_squared_to(global_position) < best.global_position.distance_squared_to(global_position):
+			best = nd
+	return best
+
+
+## 바늘 튕겨내기 — 바늘 쪽으로 돌아서 짧게 베어 지운다. 쏜 적에게는 아무 일도 없다.
+## 한 번의 입력은 바늘 하나만 지운다. 다른 반격처럼 연쇄 반격 창을 (다시) 열고 패기 방출 횟수에도 센다.
+func _deflect_needle(needle: WatcherNeedle) -> void:
+	var dx := needle.global_position.x - global_position.x
+	if absf(dx) > 1.0:
+		facing = signf(dx)
+	_parry_success = true
+	_parry_cd = 0.0
+	_open_chain()
+	_action_time = parry_success_time - deflect_success_time   # 튕겨내기 자세는 반격 성공보다 짧다
+	hurtbox.invincible = true
+	visual.play(&"parry_success")
+	var aim := rad_to_deg(atan2(needle.global_position.y - (global_position.y - 14.0), absf(dx) + 1.0))
+	_spawn_slash(clampf(aim, -70.0, 70.0), 0.9)
+	GameFeel.hit_stop(0.05)
+	GameFeel.shake(0.25)
+	_sfx(sfx_parry, 0.05)
+	sfx_parry.pitch_scale *= 1.3 * (1.0 + 0.07 * _chain_count)   # 반격음보다 가볍고 높은 "칭", 연쇄할수록 더 높게
+	_set_flash(Color(1.0, 0.93, 0.58), 0.6)
+	needle.deflect()
+	_check_haki()
 
 
 ## 카유공 반격 성공 — 세상이 거의 멈추고, 각 대상 몸에 검보라 X자 참격을 새겨 즉사시킨다.
@@ -1353,7 +1402,7 @@ func _can_take_counter_press() -> bool:
 
 
 func _has_counter_target() -> bool:
-	return not _glinting_attackers().is_empty() or not _open_counter_threats().is_empty()
+	return not _glinting_attackers().is_empty() or not _open_counter_threats().is_empty() 			or not _deflectable_needles().is_empty()
 
 
 func _cancel_chain() -> void:

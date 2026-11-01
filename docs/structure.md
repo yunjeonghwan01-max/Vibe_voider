@@ -172,7 +172,7 @@ HitboxComponent (Area2D)  ──area_entered──▶  HurtboxComponent (Area2D)
 | 7 | `enemy_hitbox` | Enemy AttackHitbox | 64 | player_hurtbox |
 
 - 바디는 world만 mask → 플레이어와 적은 서로 밀지 않고 통과한다(근접전에서 몸싸움 노이즈 제거).
-- **반격 불가 투사체**: 감시자의 바늘(`WatcherNeedle`)은 Hitbox layer를 0으로 둔다 (mask=`player_hurtbox`만). ParryBox가 감지하지 못하므로 반격 대상이 아니다 — 피해야 하는 공격.
+- **튕겨내는 투사체**: 감시자의 구체 투사체(`WatcherNeedle`, 코드상 이름은 바늘)는 Hitbox layer를 0으로 둔다 (mask=`player_hurtbox`만) — ParryBox의 근접 반격 대상이 아니다. 대신 `deflectable` 그룹에 들어가, 플레이어 중심까지 `deflect_range`(≈0.1초 거리) 안으로 다가오는 동안만 금빛으로 빛나며 `is_deflectable()` = true. 그때 반격 키를 누르면 Player가 `deflect()`를 불러 지운다 (방향 무관, 근접 반짝임·카유공보다 우선순위 낮음, 발사자 패널티 없음). 연쇄 반격의 대상이며 패기 방출 횟수에도 센다.
 - **패링 예외**: 플레이어 `Combat/ParryBox`(Area2D)는 mask=`enemy_hitbox`(64)로 적 공격 판정을 직접 감지한다. 패링 창이 열린 동안 적 Hitbox를 감지하면 패링 성공으로 처리한다. 적 Hitbox는 `enemy_hitbox` layer를 켜 두므로 ParryBox가 감지할 수 있다(이것이 Hurtbox가 아닌 Area2D가 상대 Hitbox를 감지하는 유일한 지점).
 - 피격/패링 연결은 씬의 NodePath 직렬화에 의존하지 않고 Actor의 `_ready()`에서 `hurtbox.health = health`로 코드 연결한다(손으로 작성한 `.tscn`에서 노드 타입 export가 안정적으로 풀리지 않는 경우 대비).
 
@@ -253,8 +253,14 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
 └── Audio  Glint / Swing·Lunge / Death / Spawn
 ```
 
+- **카운터 종류 (사람이 붙인 이름 — 대화·문서에서 이 약어를 쓴다)**:
+  - **MCI** (Melee Counter Inducing) = 근접 반짝임 반격. 적 공격 직전 0.4초 금빛 반짝임, ParryBox, 바라보는 쪽만. 아래 "반격(패링) 규칙".
+  - **RCI** (Ranged Counter Inducing) = 카유공 반격. 충전 → + 섬광 창(0.4초), 방향 무관, X자 결정타. 감시자 광선, 기사 ② 카유공 검기. 아래 "카유공".
+  - **PRCI** (Projectile Ranged Counter Inducing) = 투사체 튕겨내기. 감시자 구체가 닿기 직전 ≈0.1초 빛날 때 지운다, 방향 무관, 발사자 패널티 없음. 위 "튕겨내는 투사체".
+  - **CCI** (Chain Counter Inducing) = 보스 랠리의 역반격. 기사 ③ 반격 자세에 막힘 → 역반격 창(`BAIT`) → 보스가 다시 받아치면 반복. 아래 "랠리".
+  - 기사 ④ 돌진의 0.15초 반짝임은 MCI(ParryBox)와 RCI식(방향 무관) 입력을 둘 다 인정한다. 코드 식별자에는 아직 이 약어를 쓰지 않는다.
 - **반격(패링) 규칙**: 적의 모든 공격은 휘두르기 직전 `glint_duration`(0.4초) 동안 금빛으로 반짝인다 (`Enemy.begin_glint()/end_glint()/is_glinting()`, `combat/effects/glint/` 별빛 + glint 사운드). 플레이어가 그 순간 반격 키를 누르면 `ParryBox`에 겹친 반짝이는 적 중 **바라보는 쪽**(방향키를 함께 누르면 그쪽)의 가장 가까운 **하나**가 `on_parried()`로 경직된다 — 동시에 뜬 두 공격은 따로 눌러야 한다. 성공하면 앞쪽(`counter_sweep_reach` 95)으로 올려 베어 범위 안의 일반 적(그룹 `field_mob`, 다른 반짝임 제외)을 모두 기절시킨다(피해 없음). 반짝임이 없을 때 누르면 헛반격(무적 없음, 0.5초 재사용 대기 — 연타로는 못 맞춘다).
-- **연쇄 반격**: 반격(근접 반짝임/카유공)에 성공하면 `chain_window`(0.2초, 게임 시간 — 반격 연출의 hit-stop 동안 줄지 않음) 동안 반격 키를 다시 누를 수 있다. 누르면 "예약"되어 창이 끝날 때까지 유효하고, 그 사이 반짝임/카유공이 생기면 자동으로 받아친다(받아칠 때마다 창이 다시 열려 계속 이어짐, 반격음이 점점 높아진다). 끝까지 대상이 없으면 헛반격 페널티 없이 끝난다. 예약 입력은 `player.gd`의 `_process`에서 읽어 hit-stop 중에도 놓치지 않는다. 처음 성공시킨 그 입력으로는 예약되지 않는다.
+- **연쇄 반격**: 반격(근접 반짝임/카유공/바늘 튕겨내기 = MCI/RCI/PRCI)에 성공하면 `chain_window`(0.2초, 게임 시간 — 반격 연출의 hit-stop 동안 줄지 않음) 동안 반격 키를 다시 누를 수 있다. 누르면 "예약"되어 창이 끝날 때까지 유효하고, 그 사이 반짝임/카유공/빛나는 바늘이 생기면 자동으로 받아친다(받아칠 때마다 창이 다시 열려 계속 이어짐, 반격음이 점점 높아진다). 끝까지 대상이 없으면 헛반격 페널티 없이 끝난다. 예약 입력은 `player.gd`의 `_process`에서 읽어 hit-stop 중에도 놓치지 않는다. 처음 성공시킨 그 입력으로는 예약되지 않는다.
 - **패기 방출**(`actors/player/abilities/haki/`, `HakiBurst`): 연쇄 반격이 `haki_every`(3)번째로 이어질 때마다(3·6·9…) 발동. 반격 연출 뒤에 스폰해 슬로모션이 덮이지 않게 한다. 화면을 덮지 않는 노바: 0.28초 모으기(플레이어 주변 핏빛 고리가 조여듦) → 방출(짧은 검붉은 번개 화살 32개가 한꺼번에 사방으로 + 같은 속도의 얇은 충격파 고리). 카메라 화면 안의 모든 적(그룹 `enemy`)이 고리가 닿는 순간 `receive_hit(haki_damage=20)`, 맞은 자리에서 작은 번개가 지직거린다. 궁극기 게이지 +50. 연출은 실제 시간으로 흐른다.
 - 번쩍임(피격/반짝임/경직)은 `combat/effects/hit_flash/hit_flash.gdshader`를 Visual에 두고 자식은 `use_parent_material`로 칠한다 (어두운 픽셀아트는 modulate로는 밝아지지 않는다).
 - 모든 아트는 "1 아트 픽셀 = 2px" 밀도이고 Sprite2D `scale = 2`로 쓴다. 프로젝트 기본 텍스처 필터는 Nearest.
@@ -265,7 +271,7 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
 - `Toolkit` (`toolkit.gd`): `tool_toggle_hud` / `tool_restart` / `tool_pause` (`tool_cheat`를 누르고 있는 동안은 무시 — 숫자 보조 키 충돌 방지).
 - **개발 치트** (`Toolkit/Cheats`, `toolkit/cheats.gd`, 목록은 `docs/cheats.txt`): `tool_cheat`(백틱 키)를 누른 채 숫자 키(물리 키 KEY_1~9로 읽고 입력을 소비). 1 = `Player.force_chain_burst()` (3단 연쇄 반격 → 패기 방출), 2 = `Arena.summon_boss_now()` (그룹 `arena`로 찾는다, 적 추방 후 지진 없이 곧장 낙하). 발동하면 화면 위에 이름을 잠깐 띄운다.
 - **카유공(카운터 유도 공격)** — 감시자(`actors/enemies/watcher/`, 공중 원거리 중간 보스급 적 — 금장 갑각·가시 왕관·후광·칼날깃 날개, 잡몹보다 크다):
-  - 평소: 플레이어 위쪽 옆(`hover_distance`/`hover_height`)을 떠다니며 바늘(`watcher_needle.gd/.tscn`, 반격 불가)을 쏜다. 날아다니므로 `_apply_gravity`를 감속으로 오버라이드하고 몸은 지형과 충돌하지 않는다(mask 0, `fly_bounds` 안에 머문다 — 레벨이 스폰 때 지정).
+  - 평소: 플레이어 위쪽 옆(`hover_distance`/`hover_height`)을 떠다니며 바늘(`watcher_needle.gd/.tscn`, 닿기 직전 짧게 빛날 때만 튕겨내기로 지울 수 있다)을 쏜다. 날아다니므로 `_apply_gravity`를 감속으로 오버라이드하고 몸은 지형과 충돌하지 않는다(mask 0, `fly_bounds` 안에 머문다 — 레벨이 스폰 때 지정).
   - CHARGE 2초(금빛 입자가 점점 빠르게 몸 중앙으로, 공용 `combat/effects/counter_tell/` (`CounterTell`)) → WINDOW 0.4초(거대한 + 섬광 + 조준선) → 못 받아치면 히트스캔 광선(`watcher_beam.gd` 겉모습). CHARGE/WINDOW는 슈퍼아머.
   - 광선은 **확정 피격**: 맞히기 직전 대상 Hurtbox의 `invincible`을 끄고 `receive_hit()` (대시 무적/다른 적 반격 중 무적도 뚫는다). 지형에만 막히며, 그래서 CHARGE/WINDOW 동안 시야(world 레이, one-way 발판 포함)가 막히면 시야가 트이는 자리로 스스로 옮긴다.
   - 반격: `Enemy.is_counter_open()` / `Enemy.on_countered(from_pos)` (기본은 없음 — 감시자가 오버라이드)와 그룹 `counter_threat`. 플레이어가 반격 키를 누르면 ParryBox의 반짝이는 근접 공격을 먼저 처리하고, 그게 없을 때만 열린 카유공을 **방향·거리 무관**하게 받아친다 (= 다른 적 반격에 쓴 입력으로는 광선을 막지 못한다).
