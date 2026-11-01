@@ -12,7 +12,11 @@ extends Control
 const CHEATS := {
 	KEY_1: "Chain Counter x3 (Haki Burst)",
 	KEY_2: "Summon Boss",
+	KEY_3: "Rally Dummy (counter stance only, immortal)",
 }
+
+## 치트 3: 반격 자세만 쓰는 불사의 가짜 보스 (toolkit/rally_dummy — 지워도 본편에 영향 없음)
+@export var rally_dummy_scene: PackedScene
 
 @onready var toast: Label = $Toast
 
@@ -47,6 +51,9 @@ func _run(code: Key) -> void:
 		KEY_2:
 			var arena := get_tree().get_first_node_in_group("arena") as Arena
 			ok = arena != null and arena.summon_boss_now()
+		KEY_3:
+			var arena := get_tree().get_first_node_in_group("arena") as Arena
+			ok = arena != null and rally_dummy_scene != null and arena.summon_boss_now(rally_dummy_scene)
 	if not CHEATS.has(code):
 		_show("CHEAT %d: (none)" % (code - KEY_0), false)
 	else:

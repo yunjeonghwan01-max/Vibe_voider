@@ -1,0 +1,8 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://actors/enemies/knight/knight.tscn" id="1_knight"]
+[ext_resource type="Script" path="res://toolkit/rally_dummy/rally_dummy.gd" id="2_dummy"]
+
+[node name="RallyDummy" instance=ExtResource("1_knight")]
+script = ExtResource("2_dummy")
+tuning_scene = ExtResource("1_knight")

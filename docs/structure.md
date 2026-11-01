@@ -40,7 +40,7 @@ Godot 엔진의 실제 제약이 이 문서와 충돌하면 **엔진 제약이 �
 | `ui/` | 플레이어용 화면 UI (개발용 UI는 `toolkit/`) | `hud/`, `menus/`, `dialogue/`, `transitions/` |
 | `camera/` | Camera 자체와 공용 Camera 기능 (Rig, Shake, Follow, Limit 등) | — |
 | `managers/` | **게임 전체 범위**의 상태/흐름을 실제로 조율하는 고수준 관리자 (GameManager, SceneManager, SaveManager, AudioManager 등) | — |
-| `toolkit/` | 개발자용 기능 (플레이어용 UI 아님). `tool_*` 입력 액션과 대응 | `toolkit.tscn`, `toolkit.gd`, `debug_hud.gd`, `cheats.gd` (개발 치트), `asset_gen/` (오프라인 에셋 생성기) |
+| `toolkit/` | 개발자용 기능 (플레이어용 UI 아님). `tool_*` 입력 액션과 대응 | `toolkit.tscn`, `toolkit.gd`, `debug_hud.gd`, `cheats.gd` (개발 치트), `rally_dummy/` (치트 3의 랠리 연습용 가짜 보스 — `knight.tscn` 상속 씬), `asset_gen/` (오프라인 에셋 생성기) |
 | `core/` | 여러 영역이 공유하는 **저수준** 기반 | `physics/`, `state/`, `data/` |
 | `assets/` | 원본 Asset (이미지, 오디오, 폰트) | `characters/`, `environment/`, `effects/`, `audio/`, `fonts/`, `temporary/` |
 | `docs/` | 프로젝트 문서 (이 규칙서) | `structure.md` |
@@ -269,7 +269,7 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
 - 전투 손맛(hit-stop/shake/슬래시·스파크·잔상)은 명중·패링·사망 순간에 적용한다. VFX는 외부 이미지 없이 `_draw`로 그린다 (`combat/effects/slash|spark|afterimage/`).
 - 입력 액션(추가분): `player_jump`(Space만) `player_attack` `player_parry` `player_dash` `player_skill`(E) `player_ultimate` + `player_move_left/right`에 A/D 추가, `player_move_up`(↑/W)·`player_move_down`(↓/S)은 스킬 슬롯을 고르는 방향 수식키. W/↑는 점프가 아니다. 점프는 공중에서 한 번 더 할 수 있다(더블 점프, `air_jumps` 1회, 착지 시 충전, 발밑 보랏빛 고리).
 - `Toolkit` (`toolkit.gd`): `tool_toggle_hud` / `tool_restart` / `tool_pause` (`tool_cheat`를 누르고 있는 동안은 무시 — 숫자 보조 키 충돌 방지).
-- **개발 치트** (`Toolkit/Cheats`, `toolkit/cheats.gd`, 목록은 `docs/cheats.txt`): `tool_cheat`(백틱 키)를 누른 채 숫자 키(물리 키 KEY_1~9로 읽고 입력을 소비). 1 = `Player.force_chain_burst()` (3단 연쇄 반격 → 패기 방출), 2 = `Arena.summon_boss_now()` (그룹 `arena`로 찾는다, 적 추방 후 지진 없이 곧장 낙하). 발동하면 화면 위에 이름을 잠깐 띄운다.
+- **개발 치트** (`Toolkit/Cheats`, `toolkit/cheats.gd`, 목록은 `docs/cheats.txt`): `tool_cheat`(백틱 키)를 누른 채 숫자 키(물리 키 KEY_1~9로 읽고 입력을 소비). 1 = `Player.force_chain_burst()` (3단 연쇄 반격 → 패기 방출), 2 = `Arena.summon_boss_now()` (그룹 `arena`로 찾는다, 적 추방 후 지진 없이 곧장 낙하), 3 = `Arena.summon_boss_now(rally_dummy_scene)` (`toolkit/rally_dummy/`: 반격 자세만 쓰고 쓰러지지 않는 가짜 보스, 수치는 `Tuning.apply(self, <원본 씬>)`으로 `knight_tuning.cfg`를 빌린다 — 폴더와 치트 항목을 지워도 본편은 그대로). 발동하면 화면 위에 이름을 잠깐 띄운다.
 - **카유공(카운터 유도 공격)** — 감시자(`actors/enemies/watcher/`, 공중 원거리 중간 보스급 적 — 금장 갑각·가시 왕관·후광·칼날깃 날개, 잡몹보다 크다):
   - 평소: 플레이어 위쪽 옆(`hover_distance`/`hover_height`)을 떠다니며 바늘(`watcher_needle.gd/.tscn`, 닿기 직전 짧게 빛날 때만 튕겨내기로 지울 수 있다)을 쏜다. 날아다니므로 `_apply_gravity`를 감속으로 오버라이드하고 몸은 지형과 충돌하지 않는다(mask 0, `fly_bounds` 안에 머문다 — 레벨이 스폰 때 지정).
   - CHARGE 2초(금빛 입자가 점점 빠르게 몸 중앙으로, 공용 `combat/effects/counter_tell/` (`CounterTell`)) → WINDOW 0.4초(거대한 + 섬광 + 조준선) → 못 받아치면 히트스캔 광선(`watcher_beam.gd` 겉모습). CHARGE/WINDOW는 슈퍼아머.

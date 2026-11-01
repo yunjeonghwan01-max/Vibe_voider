@@ -150,15 +150,16 @@ func _on_duelist_defeated(_e: Enemy) -> void:
 
 # ─────────────────────────── 보스전 ───────────────────────────
 ## 치트/디버그: 감시자 처치 수와 상관없이 보스를 바로 부른다 (적 추방은 하고, 지진 대기 없이 곧장 떨어진다).
+## boss_scene을 주면 기사 대신 그 씬(Knight 계열)을 부른다 (치트의 연습용 가짜 보스).
 ## 이미 보스전 중이면 아무것도 하지 않고 false.
-func summon_boss_now() -> bool:
+func summon_boss_now(boss_scene: PackedScene = null) -> bool:
 	if _boss_phase:
 		return false
-	_begin_boss(true)
+	_begin_boss(true, boss_scene)
 	return true
 
 
-func _begin_boss(quick: bool = false) -> void:
+func _begin_boss(quick: bool = false, boss_scene: PackedScene = null) -> void:
 	_boss_phase = true
 	hud.set_tally(0, 0)
 	# 1) 추방 — 남은 적과 바늘이 공허로 빨려 사라진다
@@ -175,7 +176,7 @@ func _begin_boss(quick: bool = false) -> void:
 	if quick:
 		sfx_rumble.play()
 		GameFeel.shake(0.4)
-		_spawn_knight(Vector2(_pick_drop_x(), -980.0))
+		_spawn_knight(Vector2(_pick_drop_x(), -980.0), boss_scene)
 		return
 	await get_tree().create_timer(1.0, false).timeout
 	if not is_inside_tree():
@@ -203,10 +204,12 @@ func _pick_drop_x() -> float:
 	return best
 
 
-func _spawn_knight(pos: Vector2) -> void:
-	if knight_scene == null:
+func _spawn_knight(pos: Vector2, scene: PackedScene = null) -> void:
+	if scene == null:
+		scene = knight_scene
+	if scene == null:
 		return
-	var k := knight_scene.instantiate() as Knight
+	var k := scene.instantiate() as Knight
 	k.position = pos
 	k.floor_y = room_floor_y
 	k.room_x = room_x

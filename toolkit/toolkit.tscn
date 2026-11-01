@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://b3xacelwt57tr" path="res://toolkit/toolkit.gd" id="1_duuuy"]
 [ext_resource type="Script" uid="uid://do7fw5t4org7o" path="res://toolkit/debug_hud.gd" id="1_wgetk"]
 [ext_resource type="Script" path="res://toolkit/cheats.gd" id="2_cheats"]
+[ext_resource type="PackedScene" path="res://toolkit/rally_dummy/rally_dummy.tscn" id="3_rally_dummy"]
 
 [node name="Toolkit" type="CanvasLayer" unique_id=758752430]
 script = ExtResource("1_duuuy")
@@ -30,6 +31,7 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("2_cheats")
+rally_dummy_scene = ExtResource("3_rally_dummy")
 
 [node name="Toast" type="Label" parent="Cheats"]
 layout_mode = 1

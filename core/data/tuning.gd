@@ -7,10 +7,13 @@ extends RefCounted
 ## 루트의 _enter_tree()에서 부르면 자식들의 _ready()보다 먼저 적용된다 (예: Health가 max_hp로 hp를 채우기 전).
 
 
-static func apply(root: Node) -> void:
-	if root.scene_file_path.is_empty():
+## scene_path를 주면 그 씬의 수치 파일을 쓴다 (다른 씬을 상속한 씬이 원본 수치를 그대로 빌려 쓸 때).
+static func apply(root: Node, scene_path: String = "") -> void:
+	if scene_path.is_empty():
+		scene_path = root.scene_file_path
+	if scene_path.is_empty():
 		return
-	var path := root.scene_file_path.get_basename() + "_tuning.cfg"
+	var path := scene_path.get_basename() + "_tuning.cfg"
 	if not FileAccess.file_exists(path):
 		return
 	var cfg := ConfigFile.new()
