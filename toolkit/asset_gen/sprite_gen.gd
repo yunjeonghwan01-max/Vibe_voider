@@ -4,6 +4,8 @@ extends SceneTree
 ## 캐릭터 시트, 방 배경, 소품 PNG를 코드로 그려 assets/temporary/ 아래에 저장한다.
 ## 결과물은 커밋되어 있으므로 아트를 다시 뽑을 때만 실행한다:
 ##   Godot --headless --path . --script res://toolkit/asset_gen/sprite_gen.gd
+## 일부만 다시 그리려면 생성기 이름을 넘긴다 (_gen_ 뒤 이름, 다른 그림 파일은 건드리지 않는다):
+##   Godot --headless --path . --script res://toolkit/asset_gen/sprite_gen.gd -- infantry forest
 ## 같은 seed를 쓰므로 다시 실행해도 같은 그림이 나온다.
 ## 모든 아트는 "1 아트 픽셀 = 화면 2px" 밀도로 그리고, 씬에서 scale 2로 쓴다.
 
@@ -15,8 +17,15 @@ var rng := RandomNumberGenerator.new()
 func _init() -> void:
 	rng.seed = 7
 	for dir in ["characters/player", "characters/grunt", "characters/duelist", "characters/watcher", "characters/knight",
-			"environment", "effects"]:
+			"characters/infantry", "environment", "effects"]:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT + dir))
+	var only := OS.get_cmdline_user_args()
+	if not only.is_empty():
+		for gen_name in only:
+			call("_gen_" + gen_name)
+		print("[sprite_gen] done (", only, ")")
+		quit()
+		return
 	_gen_player()
 	_gen_grunt()
 	_gen_duelist()
@@ -25,6 +34,8 @@ func _init() -> void:
 	_gen_effects()   # 맨 뒤에 둔다 — rng 소비 순서가 바뀌면 기존 그림이 달라진다
 	_gen_watcher()   # 새 생성기는 항상 이 아래에 추가한다 (같은 이유)
 	_gen_knight()
+	_gen_infantry()  # Phase1 생성기는 각자 rng.seed를 다시 정해 단독 실행과 같은 그림이 나온다
+	_gen_forest()
 	print("[sprite_gen] done")
 	quit()
 
@@ -1429,3 +1440,377 @@ func _knight_sword() -> Image:
 	_put(img, 71, cy, Color(1, 1, 1))
 	_outline(img, _c(8, 4, 14))
 	return img
+
+
+# ═══════════════════════════════ Phase1 — 제3부대 보병 ═══════════════════════════════
+# 단정한 서양식 제복(어두운 회청색 + 어둑한 초록 깃·견장·허리띠·모자 띠), 각진 얼굴 가면, 철제 양손검.
+# 프레임 36x52, 발바닥 = 50행, 몸 중심 x = 18. 씬에서 Body는 (0, 32)에 offset (-18, -50), scale 2.
+# → 아트 (x, y) = 로컬 (2x - 36, 2y - 68). infantry.gd의 HAND는 각 프레임 "hand"를 이 식으로 옮긴 값이다.
+const INF_W := 36
+const INF_H := 52
+
+
+func _gen_infantry() -> void:
+	rng.seed = 3301
+	var specs := [
+		{"hand": Vector2(24, 31)},                                                    # 0 idle a
+		{"hand": Vector2(24, 31), "breath": 1},                                       # 1 idle b
+		{"hand": Vector2(24, 30), "stride": 3.0, "bob": -1},                          # 2 walk
+		{"hand": Vector2(24, 31)},                                                    # 3 walk
+		{"hand": Vector2(24, 30), "stride": -3.0, "bob": -1},                         # 4 walk
+		{"hand": Vector2(24, 31)},                                                    # 5 walk
+		{"hand": Vector2(20, 3), "lean": -2.0, "stride": 2.5},                        # 6 raise (양손검을 머리 위로)
+		{"hand": Vector2(28, 32), "lean": 3.5, "stride": 5.0, "crouch": 2},           # 7 strike (내려 벤 자세)
+		{"hand": Vector2(21, 33), "lean": -3.5, "stride": -1.5, "crouch": 1},         # 8 hurt / 기절
+	]
+	var frames: Array[Image] = []
+	for s in specs:
+		frames.append(_infantry_frame(s))
+	_save(_sheet(frames), "characters/infantry/infantry.png")
+	_save(_infantry_sword(), "characters/infantry/infantry_sword.png")
+
+
+func _infantry_frame(p: Dictionary) -> Image:
+	var img := _new(INF_W, INF_H)
+	var coat := _c(46, 52, 66)
+	var trouser := _c(30, 32, 42)
+	var boot := _c(14, 14, 18)
+	var green := _c(58, 118, 78)
+	var cap := _c(30, 34, 44)
+	var mask := _c(200, 194, 176)
+	var mask_d := _c(138, 132, 118)
+	var slit := _c(10, 12, 12)
+	var glove := _c(26, 26, 30)
+	var button := _c(150, 156, 160)
+	var crouch: float = p.get("crouch", 0) + p.get("breath", 0) * 0.5
+	var lean: float = p.get("lean", 0.0)
+	var stride: float = p.get("stride", 0.0)
+	var bob: float = p.get("bob", 0)
+	var hand: Vector2 = p["hand"]
+	var arms_back: bool = p.get("arms_back", false)
+	var ground := 50.0
+	var cx := 18.0
+	var hip_y := 35.0 + crouch + bob
+	# 기울임: 엉덩이 위쪽 점일수록 lean만큼 앞으로 민다.
+	var sh := func(v: Vector2) -> Vector2:
+		var y := v.y + crouch + bob
+		var t := clampf((hip_y - y) / 28.0, 0.0, 1.0)
+		return Vector2(v.x + lean * t, y)
+
+	# 뒷팔 (몸 뒤)
+	var bs: Vector2 = sh.call(Vector2(cx - 3, 21))
+	_line(img, bs, hand + Vector2(-1, 1), 3.2, coat.darkened(0.35))
+	_ellipse(img, hand.x - 1, hand.y + 1, 1.8, 1.8, glove.darkened(0.3))
+	# 다리 + 군화
+	var back_foot := Vector2(cx - 2 - stride, ground - 2)
+	var front_foot := Vector2(cx + 3 + stride, ground - 2)
+	_line(img, Vector2(cx - 2, hip_y), back_foot, 3.6, trouser.darkened(0.3))
+	_line(img, Vector2(cx + 2, hip_y), front_foot, 3.6, trouser)
+	_rect(img, int(back_foot.x) - 2, int(ground) - 3, 6, 3, boot.darkened(0.2))
+	_rect(img, int(front_foot.x) - 1, int(ground) - 3, 6, 3, boot)
+	# 상의 (각진 어깨의 단정한 제복)
+	var body := PackedVector2Array()
+	for v in [Vector2(cx - 7, 19), Vector2(cx + 6, 19), Vector2(cx + 7, 24), Vector2(cx + 6, 31), Vector2(cx + 8, 39),
+			Vector2(cx - 7, 39), Vector2(cx - 7, 31), Vector2(cx - 8, 24)]:
+		body.append(sh.call(v))
+	_poly(img, body, coat)
+	for y in INF_H:
+		var back: Vector2 = sh.call(Vector2(cx - 3, y - crouch - bob))
+		for x in INF_W:
+			if x < back.x and img.get_pixel(x, y).is_equal_approx(coat):
+				img.set_pixel(x, y, coat.darkened(0.22))   # 등 쪽 그늘
+	# 초록 허리띠 + 단추 + 깃 + 견장
+	_poly(img, PackedVector2Array([sh.call(Vector2(cx - 7.5, 30)), sh.call(Vector2(cx + 7, 30)),
+			sh.call(Vector2(cx + 7, 32)), sh.call(Vector2(cx - 7.5, 32))]), green)
+	for y in [22, 25, 28]:
+		var b: Vector2 = sh.call(Vector2(cx + 3, y))
+		_put(img, int(b.x), int(b.y), button)
+	_poly(img, PackedVector2Array([sh.call(Vector2(cx - 4, 17.5)), sh.call(Vector2(cx + 5, 17.5)),
+			sh.call(Vector2(cx + 5, 20)), sh.call(Vector2(cx - 4, 20))]), green)
+	_poly(img, PackedVector2Array([sh.call(Vector2(cx + 2, 18.5)), sh.call(Vector2(cx + 7, 18.5)),
+			sh.call(Vector2(cx + 7.5, 20.5)), sh.call(Vector2(cx + 2, 20.5))]), green.darkened(0.15))
+	# 앞팔 — 치켜든 자세에서는 머리 뒤로 지나가므로 머리보다 먼저 그린다
+	if arms_back:
+		_infantry_front_arm(img, sh.call(Vector2(cx + 4, 21)), hand, coat, green, glove)
+	# 머리: 뒷머리 → 케피 모자(초록 띠, 챙) → 각진 가면(눈구멍 한 줄, 이마의 부대 표식)
+	var hc: Vector2 = sh.call(Vector2(cx + 1, 13))
+	_ellipse(img, hc.x - 1, hc.y, 5.0, 5.5, cap.darkened(0.35))
+	_poly(img, PackedVector2Array([hc + Vector2(-6, -9), hc + Vector2(4, -9), hc + Vector2(5, -3), hc + Vector2(-6, -3)]), cap)
+	_rect(img, int(hc.x - 6), int(hc.y - 5), 11, 2, green)
+	_rect(img, int(hc.x + 3), int(hc.y - 3), 5, 1, boot)
+	_poly(img, PackedVector2Array([hc + Vector2(-3, -3), hc + Vector2(5, -3), hc + Vector2(6, -1), hc + Vector2(6, 5),
+			hc + Vector2(4, 7), hc + Vector2(-2, 7), hc + Vector2(-3, 5)]), mask)
+	_rect(img, int(hc.x - 3), int(hc.y - 2), 2, 8, mask_d)
+	_rect(img, int(hc.x + 1), int(hc.y - 1), 5, 1, mask_d)
+	_rect(img, int(hc.x + 1), int(hc.y), 5, 1, slit)
+	_rect(img, int(hc.x - 1), int(hc.y + 4), 6, 1, mask_d)
+	_rect(img, int(hc.x + 2), int(hc.y - 2), 2, 1, green)
+	if not arms_back:
+		_infantry_front_arm(img, sh.call(Vector2(cx + 4, 21)), hand, coat, green, glove)
+	_shade_edges(img, 0.2, 0.25, [slit, green, button])
+	_outline(img, _c(8, 8, 12))
+	return img
+
+
+func _infantry_front_arm(img: Image, shoulder: Vector2, hand: Vector2, coat: Color, green: Color, glove: Color) -> void:
+	_line(img, shoulder, hand, 3.4, coat)
+	_line(img, shoulder.lerp(hand, 0.72), shoulder.lerp(hand, 0.86), 3.8, green)   # 초록 소맷부리
+	_ellipse(img, hand.x, hand.y, 2.0, 2.0, glove)
+
+
+## 철제 양손검 — 긴 손잡이(초록 감개), 일자 가드, 무광 철 칼날. 회전축 = 손잡이 가운데 (5.5, 4.5).
+## 칼끝까지 ≈ 36 아트px = 72 로컬px (infantry.gd의 BLADE_REACH).
+func _infantry_sword() -> Image:
+	var img := _new(43, 9)
+	var cy := 4
+	_ellipse(img, 1.5, 4.5, 1.5, 1.6, _c(92, 94, 102))            # 폼멜
+	_rect(img, 2, 3, 7, 3, _c(34, 56, 42))                         # 손잡이 (초록 가죽 감개)
+	for x in [3, 5, 7]:
+		_put(img, x, 3, _c(62, 98, 72))
+	_rect(img, 9, 1, 1, 7, _c(70, 72, 82))                         # 가드
+	for x in range(10, 41):
+		var hw := 1 if x < 39 else 0
+		for y in range(cy - hw, cy + hw + 1):
+			var c := _c(138, 144, 154)
+			if hw > 0 and y == cy - hw:
+				c = _c(196, 200, 208)
+			elif hw > 0 and y == cy + hw:
+				c = _c(84, 88, 98)
+			_put(img, x, y, c)
+	_put(img, 41, cy, _c(222, 226, 232))
+	_outline(img, _c(8, 8, 12))
+	return img
+
+
+# ═══════════════════════════════ Phase1 — 숲 (placeholder 배경) ═══════════════════════════════
+# 월드: 바닥 윗면 y = 0, 싸움터 안쪽 x[-1100, 1100]. 모두 1 아트 픽셀 = 2px, 씬에서 scale 2.
+const FOREST_W := 1300   # 중경 나무/바닥 너비(셀) → 월드 x[-1300, 1300]
+
+
+func _gen_forest() -> void:
+	rng.seed = 4401
+	_gen_forest_far()
+	_gen_forest_trees()
+	_gen_forest_ground()
+	_gen_forest_edge()
+	_gen_forest_fern()
+	_gen_forest_leaves()
+
+
+## 먼 배경: 밤하늘 + 달 + 안개 낀 전나무 능선 두 겹. 2200x800px (SkyLayer, 시차 이동).
+func _gen_forest_far() -> void:
+	var w := 1100
+	var h := 400
+	var img := _new(w, h)
+	for y in h:
+		var c := Color(0.025, 0.04, 0.06).lerp(Color(0.10, 0.17, 0.18), pow(float(y) / h, 1.4))
+		for x in w:
+			img.set_pixel(x, y, c)
+	for i in 140:
+		var x := rng.randi_range(0, w - 1)
+		var y := rng.randi_range(0, int(h * 0.4))
+		img.set_pixel(x, y, img.get_pixel(x, y).lerp(Color(0.8, 0.9, 0.88), rng.randf_range(0.25, 0.75)))
+	var mc := Vector2(380, 70)
+	for y in range(int(mc.y) - 44, int(mc.y) + 45):
+		for x in range(int(mc.x) - 44, int(mc.x) + 45):
+			var d := Vector2(x + 0.5, y + 0.5).distance_to(mc)
+			if d <= 13.0:
+				var lit := Vector2(x + 0.5, y + 0.5).distance_to(mc + Vector2(-4, -4)) / 21.0
+				_put(img, x, y, Color(0.9, 0.95, 0.9).lerp(Color(0.66, 0.74, 0.72), clampf(lit, 0.0, 1.0)))
+			elif d <= 44.0:
+				_put(img, x, y, _px(img, x, y).lerp(Color(0.5, 0.62, 0.6), pow(1.0 - d / 44.0, 2.0) * 0.3))
+	_tree_line(img, 250, 40.0, 90.0, Color(0.085, 0.14, 0.15), 10, 22)
+	for y in range(225, 305):
+		var k := 1.0 - absf(y - 265.0) / 40.0
+		for x in w:
+			img.set_pixel(x, y, img.get_pixel(x, y).lerp(Color(0.16, 0.24, 0.24), k * 0.35))
+	_tree_line(img, 305, 60.0, 135.0, Color(0.05, 0.085, 0.095), 14, 30)
+	_save(img, "environment/forest_far.png")
+
+
+## 전나무 실루엣 줄 — 톱니 모양 가지 층, 아래는 같은 색으로 채운다.
+func _tree_line(img: Image, base_y: int, hmin: float, hmax: float, c: Color, gap_min: int, gap_max: int) -> void:
+	var w := img.get_width()
+	_rect(img, 0, base_y, w, img.get_height() - base_y, c)
+	var x := -rng.randi_range(0, gap_max)
+	while x < w + gap_max:
+		var th := rng.randf_range(hmin, hmax)
+		var half := th * rng.randf_range(0.2, 0.28)
+		var tiers := 5
+		var right := PackedVector2Array()
+		var left := PackedVector2Array()
+		for i in range(1, tiers + 1):
+			var yy := base_y - th + th * float(i) / tiers
+			var hw := half * float(i) / tiers
+			right.append(Vector2(x + hw, yy))
+			left.append(Vector2(x - hw, yy))
+			if i < tiers:
+				right.append(Vector2(x + hw * 0.55, yy + 1.0))
+				left.append(Vector2(x - hw * 0.55, yy + 1.0))
+		var pts := PackedVector2Array([Vector2(x, base_y - th)])
+		pts.append_array(right)
+		left.reverse()
+		pts.append_array(left)
+		_poly(img, pts, c)
+		x += rng.randi_range(gap_min, gap_max)
+
+
+## 중경: 큰 나무 줄기들 + 안개 속 가는 줄기 + 위쪽 우거진 잎 + 늘어진 덩굴. 2600x840px, 투명 배경.
+func _gen_forest_trees() -> void:
+	var w := FOREST_W
+	var h := 420
+	var img := _new(w, h)
+	for i in 26:
+		var x := rng.randi_range(0, w)
+		_rect(img, x, 0, rng.randi_range(4, 8), h, Color(0.075, 0.115, 0.12))
+	for tx in [60, 210, 330, 520, 780, 900, 1080, 1240]:
+		_trunk(img, tx, rng.randi_range(16, 30), h)
+	# 캐노피 — 아래 가장자리가 출렁이는 잎 덩어리
+	var edge: Array[float] = []
+	for x in w:
+		edge.append(62.0 + 24.0 * sin(x * 0.013) + 13.0 * sin(x * 0.041 + 1.0))
+	for x in w:
+		for y in int(edge[x]):
+			_put(img, x, y, Color(0.035, 0.065, 0.05))
+	for i in 520:
+		var x := rng.randi_range(0, w - 1)
+		var y := edge[x] + rng.randf_range(-22.0, 6.0)
+		var col := Color(0.035, 0.065, 0.05) if rng.randf() < 0.55 else Color(0.06, 0.105, 0.075)
+		_ellipse(img, x, y, rng.randf_range(5.0, 13.0), rng.randf_range(3.5, 8.0), col)
+	for i in 900:
+		var x := rng.randi_range(0, w - 1)
+		var y := rng.randi_range(0, int(edge[x]) + 4)
+		if _px(img, x, y).a > 0.0:
+			_put(img, x, y, Color(0.1, 0.18, 0.12))
+	# 덩굴
+	for i in 16:
+		var x0 := rng.randi_range(10, w - 10)
+		var len := rng.randi_range(40, 170)
+		var ph := rng.randf_range(0.0, TAU)
+		for s in len:
+			var p := Vector2(x0 + 2.0 * sin(s * 0.08 + ph), edge[x0] + s)
+			_put(img, int(p.x), int(p.y), Color(0.05, 0.1, 0.06))
+			if s % 6 == 0:
+				_ellipse(img, p.x + (1.5 if s % 12 == 0 else -1.5), p.y, 1.6, 1.0, Color(0.07, 0.13, 0.08))
+	_save(img, "environment/forest_trees.png")
+
+
+## 나무 줄기 — 세로 결, 왼쪽 달빛 테두리, 아래 뿌리 퍼짐, 이끼 몇 점.
+func _trunk(img: Image, cx: int, tw: int, h: int) -> void:
+	var grain: Array[float] = []
+	for i in 64:
+		grain.append(rng.randf_range(-0.018, 0.018))
+	var lean := rng.randf_range(-0.04, 0.04)
+	for y in h:
+		var flare := 0.0
+		if y > h - 36:
+			flare = pow((y - (h - 36)) / 36.0, 2.0) * 16.0
+		var mid := cx + lean * (h - y)
+		var x0 := int(mid - tw * 0.5 - flare)
+		var x1 := int(mid + tw * 0.5 + flare)
+		for x in range(x0, x1 + 1):
+			var u := float(x - x0) / maxf(x1 - x0, 1.0)
+			var v: float = grain[(x - int(mid) + 32) % 64]
+			var c := Color(0.065 + v, 0.075 + v, 0.07 + v)
+			if u < 0.12:
+				c = c.lerp(Color(0.15, 0.2, 0.2), 0.6)
+			elif u > 0.8:
+				c = c.darkened(0.35)
+			_put(img, x, y, c)
+	for i in 6:
+		var my := rng.randi_range(120, h - 20)
+		var mx := cx + lean * (h - my) + rng.randf_range(-tw * 0.3, tw * 0.3)
+		_ellipse(img, mx, my, rng.randf_range(2.0, 5.0), rng.randf_range(3.0, 7.0), Color(0.1, 0.17, 0.11))
+
+
+## 흙바닥 — 위 6행은 풀잎(투명 배경), 그 아래가 바닥 윗면(월드 y = 0). 2600x200px.
+func _gen_forest_ground() -> void:
+	var w := FOREST_W
+	var h := 100
+	var top := 6
+	var img := _new(w, h)
+	for y in range(top, h):
+		var t := float(y - top) / (h - top)
+		for x in w:
+			var c := Color(0.15, 0.11, 0.085).lerp(Color(0.04, 0.03, 0.03), clampf(t * 1.6, 0.0, 1.0))
+			var n := rng.randf_range(-0.012, 0.012)
+			img.set_pixel(x, y, Color(c.r + n, c.g + n, c.b + n))
+	for i in 120:
+		var py := rng.randf_range(top + 7.0, h - 24.0)
+		var pr := rng.randf_range(1.0, 2.5)
+		_ellipse(img, rng.randf_range(0.0, w), py, pr, pr * 0.7, Color(0.2, 0.18, 0.16).darkened(clampf((py - top) / 60.0, 0.0, 0.8)))
+	for i in 14:
+		var a := Vector2(rng.randf_range(0.0, w), top + 2.0)
+		var dirx := 1.0 if rng.randf() < 0.5 else -1.0
+		var b := a + Vector2(dirx * rng.randf_range(20.0, 50.0), rng.randf_range(10.0, 26.0))
+		_line(img, a, b, 2.0, Color(0.09, 0.07, 0.055))
+	for x in w:
+		var drip := int(2.0 + 2.0 * sin(x * 0.3) + rng.randi_range(0, 2))
+		for y in range(top, top + 3 + drip):
+			var c := Color(0.12, 0.2, 0.12).darkened((y - top) * 0.12)
+			if y == top:
+				c = Color(0.18, 0.28, 0.16)
+			img.set_pixel(x, y, c)
+		if rng.randf() < 0.55:
+			var gh := rng.randi_range(1, 5)
+			var tilt := rng.randi_range(-1, 1)
+			for k in gh:
+				_put(img, x + (tilt if k > 2 else 0), top - 1 - k, Color(0.14, 0.24, 0.14).lerp(Color(0.22, 0.34, 0.2), float(k) / 5.0))
+	_save(img, "environment/forest_ground.png")
+
+
+## 싸움터 양 끝의 빽빽한 숲 벽 (왼쪽 기준, 오른쪽 면이 안쪽 — 오른쪽은 flip_h). 240x840px.
+func _gen_forest_edge() -> void:
+	var w := 120
+	var h := 420
+	var img := _new(w, h)
+	for y in h:
+		for x in w:
+			img.set_pixel(x, y, Color(0.02, 0.035, 0.03).lerp(Color(0.035, 0.06, 0.05), float(x) / w))
+	_trunk(img, 84, 56, h)
+	for i in 40:
+		_ellipse(img, rng.randf_range(0.0, w), rng.randf_range(350.0, h), rng.randf_range(6.0, 16.0),
+				rng.randf_range(4.0, 10.0), Color(0.03, 0.06, 0.045) if i % 2 == 0 else Color(0.05, 0.09, 0.065))
+	_save(img, "environment/forest_edge.png")
+
+
+## 전경 고사리 (화면 아래 가장자리, 어두운 실루엣). 220x80px.
+func _gen_forest_fern() -> void:
+	var img := _new(110, 40)
+	var base := Vector2(55, 39)
+	for i in 9:
+		var ang := lerpf(-160.0, -20.0, i / 8.0) + rng.randf_range(-8.0, 8.0)
+		var droop := 50.0 if ang > -90.0 else -50.0
+		var length := rng.randf_range(30.0, 52.0)
+		var p := base
+		for s in int(length):
+			var u := s / length
+			var d := Vector2.from_angle(deg_to_rad(ang + u * u * droop))
+			p += d
+			_put(img, int(p.x), int(p.y), Color(0.05, 0.09, 0.06))
+			if s % 3 == 0 and s > 4:
+				var leaf := (1.0 - u) * 6.0 + 1.0
+				var n := Vector2(-d.y, d.x)
+				_line(img, p, p + n * leaf, 1.0, Color(0.025, 0.045, 0.035))
+				_line(img, p, p - n * leaf, 1.0, Color(0.025, 0.045, 0.035))
+	_save(img, "environment/forest_fern.png")
+
+
+## 전경 위쪽에 늘어진 잎 가장자리 (어두운 실루엣). 320x120px.
+func _gen_forest_leaves() -> void:
+	var w := 160
+	var h := 60
+	var img := _new(w, h)
+	var col := Color(0.02, 0.04, 0.03)
+	_rect(img, 0, 0, w, 10, col)
+	for i in 70:
+		var x := rng.randf_range(0.0, w)
+		_ellipse(img, x, rng.randf_range(6.0, 22.0), rng.randf_range(4.0, 10.0), rng.randf_range(3.0, 6.0), col)
+	for i in 9:
+		var x0 := rng.randf_range(4.0, w - 4.0)
+		var len := rng.randi_range(14, 52)
+		for s in len:
+			_put(img, int(x0 + sin(s * 0.2 + i)), 14 + s, col)
+			if s % 5 == 0:
+				_ellipse(img, x0 + sin(s * 0.2 + i) + 1.5, 14 + s, 1.8, 1.1, col)
+	_save(img, "environment/forest_leaves.png")

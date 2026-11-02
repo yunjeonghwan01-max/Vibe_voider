@@ -1,0 +1,244 @@
+[gd_scene format=3 uid="uid://cbpi0t4ev5fwy"]
+
+[ext_resource type="Script" uid="uid://di2c2usthond5" path="res://levels/phase1/phase1.gd" id="1_phase1"]
+[ext_resource type="Script" uid="uid://dmwyp285sseu4" path="res://camera/game_camera.gd" id="2_cam"]
+[ext_resource type="PackedScene" uid="uid://cfpo0llem30uy" path="res://actors/player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" uid="uid://cfmdhfvl16emi" path="res://ui/hud/hud.tscn" id="4_hud"]
+[ext_resource type="PackedScene" uid="uid://c7nqgrb65tuyi" path="res://actors/enemies/infantry/infantry.tscn" id="5_infantry"]
+[ext_resource type="AudioStream" uid="uid://bxcfly0xthxyk" path="res://assets/temporary/audio/music_loop.wav" id="a_music"]
+[ext_resource type="Texture2D" uid="uid://dlw0ev4shwoir" path="res://assets/temporary/environment/forest_edge.png" id="t_edge"]
+[ext_resource type="Texture2D" uid="uid://cna7d5j1rfuel" path="res://assets/temporary/environment/forest_far.png" id="t_far"]
+[ext_resource type="Texture2D" uid="uid://c6w1sr44o08ir" path="res://assets/temporary/environment/forest_fern.png" id="t_fern"]
+[ext_resource type="Texture2D" uid="uid://c2etf1b15usuj" path="res://assets/temporary/environment/forest_ground.png" id="t_ground"]
+[ext_resource type="Texture2D" uid="uid://bcwpjxmlapoe5" path="res://assets/temporary/environment/forest_leaves.png" id="t_leaves"]
+[ext_resource type="Texture2D" uid="uid://cgk8asiq4kfcc" path="res://assets/temporary/environment/forest_trees.png" id="t_trees"]
+
+[sub_resource type="CanvasItemMaterial" id="Mat_add"]
+blend_mode = 1
+
+[sub_resource type="Gradient" id="Grad_moon"]
+offsets = PackedFloat32Array(0, 0.3, 1)
+colors = PackedColorArray(0.7, 0.9, 0.85, 0.45, 0.55, 0.75, 0.72, 0.15, 0.5, 0.7, 0.7, 0)
+
+[sub_resource type="GradientTexture2D" id="Tex_moon"]
+gradient = SubResource("Grad_moon")
+width = 128
+height = 128
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 0.5)
+
+[sub_resource type="Gradient" id="Grad_firefly"]
+offsets = PackedFloat32Array(0, 0.25, 0.6, 1)
+colors = PackedColorArray(0.75, 1, 0.55, 0, 0.75, 1, 0.55, 0.8, 0.75, 1, 0.55, 0.5, 0.75, 1, 0.55, 0)
+
+[sub_resource type="RectangleShape2D" id="Rect_ground"]
+size = Vector2(2600, 200)
+
+[sub_resource type="RectangleShape2D" id="Rect_wall"]
+size = Vector2(200, 1100)
+
+[sub_resource type="Gradient" id="Grad_vignette"]
+offsets = PackedFloat32Array(0, 0.55, 1)
+colors = PackedColorArray(0, 0, 0, 0, 0, 0.03, 0.02, 0.12, 0, 0.03, 0.02, 0.72)
+
+[sub_resource type="GradientTexture2D" id="Tex_vignette"]
+gradient = SubResource("Grad_vignette")
+width = 256
+height = 256
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(1, 1)
+
+[node name="Phase1" type="Node2D" unique_id=261721383]
+script = ExtResource("1_phase1")
+infantry_scene = ExtResource("5_infantry")
+
+[node name="World" type="Node2D" parent="." unique_id=272644040]
+
+[node name="SkyLayer" type="Node2D" parent="World" unique_id=360158030]
+z_index = -20
+
+[node name="Far" type="Sprite2D" parent="World/SkyLayer" unique_id=515952707]
+position = Vector2(-1100, -800)
+scale = Vector2(2, 2)
+texture = ExtResource("t_far")
+centered = false
+
+[node name="MoonGlow" type="Sprite2D" parent="World/SkyLayer" unique_id=1894234892]
+texture_filter = 2
+material = SubResource("Mat_add")
+position = Vector2(-340, -660)
+scale = Vector2(2.4, 2.4)
+texture = SubResource("Tex_moon")
+
+[node name="Trees" type="Sprite2D" parent="World" unique_id=305316403]
+z_index = -15
+position = Vector2(-1300, -840)
+scale = Vector2(2, 2)
+texture = ExtResource("t_trees")
+centered = false
+
+[node name="LightShafts" type="Node2D" parent="World" unique_id=1192880353]
+z_index = -14
+material = SubResource("Mat_add")
+
+[node name="ShaftLeft" type="Polygon2D" parent="World/LightShafts" unique_id=1650978742]
+use_parent_material = true
+polygon = PackedVector2Array(-640, -700, -560, -700, -330, 0, -500, 0)
+vertex_colors = PackedColorArray(0.55, 0.8, 0.75, 0.1, 0.55, 0.8, 0.75, 0.1, 0.55, 0.8, 0.75, 0.01, 0.55, 0.8, 0.75, 0.01)
+
+[node name="ShaftCenter" type="Polygon2D" parent="World/LightShafts" unique_id=469104457]
+use_parent_material = true
+polygon = PackedVector2Array(-60, -700, 30, -700, 260, 0, 80, 0)
+vertex_colors = PackedColorArray(0.55, 0.8, 0.75, 0.12, 0.55, 0.8, 0.75, 0.12, 0.55, 0.8, 0.75, 0.015, 0.55, 0.8, 0.75, 0.015)
+
+[node name="ShaftRight" type="Polygon2D" parent="World/LightShafts" unique_id=1084514759]
+use_parent_material = true
+polygon = PackedVector2Array(520, -700, 590, -700, 830, 0, 680, 0)
+vertex_colors = PackedColorArray(0.55, 0.8, 0.75, 0.09, 0.55, 0.8, 0.75, 0.09, 0.55, 0.8, 0.75, 0.01, 0.55, 0.8, 0.75, 0.01)
+
+[node name="Fireflies" type="CPUParticles2D" parent="World" unique_id=1471057699]
+z_index = -12
+position = Vector2(0, -260)
+amount = 40
+lifetime = 7.0
+preprocess = 7.0
+emission_shape = 3
+emission_rect_extents = Vector2(1050, 240)
+direction = Vector2(0, -1)
+spread = 180.0
+gravity = Vector2(0, 0)
+initial_velocity_min = 3.0
+initial_velocity_max = 12.0
+scale_amount_min = 2.0
+scale_amount_max = 3.0
+color_ramp = SubResource("Grad_firefly")
+
+[node name="Ground" type="StaticBody2D" parent="World" unique_id=1215214709]
+collision_mask = 0
+
+[node name="Visual" type="Sprite2D" parent="World/Ground" unique_id=509605076]
+position = Vector2(-1300, -12)
+scale = Vector2(2, 2)
+texture = ExtResource("t_ground")
+centered = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/Ground" unique_id=1855128730]
+position = Vector2(0, 100)
+shape = SubResource("Rect_ground")
+
+[node name="LeftWall" type="StaticBody2D" parent="World" unique_id=244167018]
+position = Vector2(-1200, -400)
+collision_mask = 0
+
+[node name="Visual" type="Sprite2D" parent="World/LeftWall" unique_id=1674123101]
+z_index = 4
+position = Vector2(-140, -440)
+scale = Vector2(2, 2)
+texture = ExtResource("t_edge")
+centered = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/LeftWall" unique_id=1241095556]
+shape = SubResource("Rect_wall")
+
+[node name="RightWall" type="StaticBody2D" parent="World" unique_id=2022944506]
+position = Vector2(1200, -400)
+collision_mask = 0
+
+[node name="Visual" type="Sprite2D" parent="World/RightWall" unique_id=1967098295]
+z_index = 4
+position = Vector2(-100, -440)
+scale = Vector2(2, 2)
+texture = ExtResource("t_edge")
+centered = false
+flip_h = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/RightWall" unique_id=749950530]
+shape = SubResource("Rect_wall")
+
+[node name="Foreground" type="Node2D" parent="World" unique_id=437937184]
+modulate = Color(0.55, 0.6, 0.6, 1)
+z_index = 8
+
+[node name="LeavesA" type="Sprite2D" parent="World/Foreground" unique_id=1121397285]
+position = Vector2(-900, -820)
+scale = Vector2(2, 2)
+texture = ExtResource("t_leaves")
+centered = false
+
+[node name="LeavesB" type="Sprite2D" parent="World/Foreground" unique_id=933738061]
+position = Vector2(-120, -840)
+scale = Vector2(2, 2)
+texture = ExtResource("t_leaves")
+centered = false
+flip_h = true
+
+[node name="LeavesC" type="Sprite2D" parent="World/Foreground" unique_id=222480143]
+position = Vector2(640, -820)
+scale = Vector2(2, 2)
+texture = ExtResource("t_leaves")
+centered = false
+
+[node name="FernA" type="Sprite2D" parent="World/Foreground" unique_id=1249262674]
+position = Vector2(-1000, 72)
+scale = Vector2(2, 2)
+texture = ExtResource("t_fern")
+centered = false
+
+[node name="FernB" type="Sprite2D" parent="World/Foreground" unique_id=1352216988]
+position = Vector2(-260, 80)
+scale = Vector2(2, 2)
+texture = ExtResource("t_fern")
+centered = false
+flip_h = true
+
+[node name="FernC" type="Sprite2D" parent="World/Foreground" unique_id=1647012581]
+position = Vector2(480, 74)
+scale = Vector2(2, 2)
+texture = ExtResource("t_fern")
+centered = false
+
+[node name="FernD" type="Sprite2D" parent="World/Foreground" unique_id=476204748]
+position = Vector2(1120, 78)
+scale = Vector2(2, 2)
+texture = ExtResource("t_fern")
+centered = false
+flip_h = true
+
+[node name="Actors" type="Node2D" parent="." unique_id=2086387614]
+
+[node name="Player" parent="Actors" unique_id=938782522 instance=ExtResource("3_player")]
+position = Vector2(0, -30)
+
+[node name="Projectiles" type="Node2D" parent="." unique_id=1958866922]
+
+[node name="Effects" type="Node2D" parent="." unique_id=630091115]
+z_index = 6
+
+[node name="GameCamera" type="Camera2D" parent="." unique_id=727030505]
+position = Vector2(0, -210)
+script = ExtResource("2_cam")
+room_limits = Rect2(-1140, -800, 2280, 950)
+
+[node name="Vignette" type="CanvasLayer" parent="." unique_id=1723869356]
+
+[node name="Shade" type="TextureRect" parent="Vignette" unique_id=212337865]
+texture_filter = 2
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = SubResource("Tex_vignette")
+expand_mode = 1
+
+[node name="Hud" parent="." unique_id=992193166 instance=ExtResource("4_hud")]
+
+[node name="Audio" type="Node" parent="." unique_id=403503023]
+
+[node name="Music" type="AudioStreamPlayer" parent="Audio" unique_id=1249439586]
+stream = ExtResource("a_music")
+volume_db = -15.0
+autoplay = true
