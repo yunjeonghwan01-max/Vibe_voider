@@ -202,7 +202,7 @@ Main (Node)
 └── Toolkit          항상 켜진 개발 툴킷 (PROCESS_MODE_ALWAYS)
 ```
 
-`CurrentLevel` 같은 분류용 컨테이너는 두지 않는다. 런타임 Level 교체 코드가 생겨서 삽입 지점이 실제로 필요해지면 그때 만든다.
+`CurrentLevel` 같은 분류용 컨테이너는 두지 않는다. Level 교체는 `main.gd`가 맡는다: `levels`(`Array[PackedScene]`, `levels[0]` = `main.tscn`에 미리 놓인 기본 Level)와 그 인스턴스 `level`을 export로 받고, 고른 순번을 `static var`에 두어 씬 재로드(재시작)를 넘어 유지한다. 교체는 `cycle_level()` → 씬 재로드 → `_enter_tree()`에서 자식이 트리에 들어가기 전에 기본 Level을 고른 Level로 바꿔 끼운다 (지금은 개발 치트 8만 호출한다). 새 Level을 만들면 `levels` 목록에도 추가한다.
 
 ---
 
@@ -269,7 +269,7 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
 - 전투 손맛(hit-stop/shake/슬래시·스파크·잔상)은 명중·패링·사망 순간에 적용한다. VFX는 외부 이미지 없이 `_draw`로 그린다 (`combat/effects/slash|spark|afterimage/`).
 - 입력 액션(추가분): `player_jump`(Space만) `player_attack` `player_parry` `player_dash` `player_skill`(E) `player_ultimate` + `player_move_left/right`에 A/D 추가, `player_move_up`(↑/W)·`player_move_down`(↓/S)은 스킬 슬롯을 고르는 방향 수식키. W/↑는 점프가 아니다. 점프는 공중에서 한 번 더 할 수 있다(더블 점프, `air_jumps` 1회, 착지 시 충전, 발밑 보랏빛 고리).
 - `Toolkit` (`toolkit.gd`): `tool_toggle_hud` / `tool_restart` / `tool_pause` (`tool_cheat`를 누르고 있는 동안은 무시 — 숫자 보조 키 충돌 방지).
-- **개발 치트** (`Toolkit/Cheats`, `toolkit/cheats.gd`, 목록은 `docs/cheats.txt`): `tool_cheat`(백틱 키)를 누른 채 숫자 키(물리 키 KEY_1~9로 읽고 입력을 소비). 1 = `Player.force_chain_burst()` (3단 연쇄 반격 → 패기 방출), 2 = `Arena.summon_boss_now()` (그룹 `arena`로 찾는다, 적 추방 후 지진 없이 곧장 낙하), 3 = `Arena.summon_boss_now(rally_dummy_scene)` (`toolkit/rally_dummy/`: 반격 자세만 쓰고 쓰러지지 않는 가짜 보스, 수치는 `Tuning.apply(self, <원본 씬>)`으로 `knight_tuning.cfg`를 빌린다 — 폴더와 치트 항목을 지워도 본편은 그대로). 발동하면 화면 위에 이름을 잠깐 띄운다.
+- **개발 치트** (`Toolkit/Cheats`, `toolkit/cheats.gd`, 목록은 `docs/cheats.txt`): `tool_cheat`(백틱 키)를 누른 채 숫자 키(물리 키 KEY_1~9로 읽고 입력을 소비). 1 = `Player.force_chain_burst()` (3단 연쇄 반격 → 패기 방출), 2 = `Arena.summon_boss_now()` (그룹 `arena`로 찾는다, 적 추방 후 지진 없이 곧장 낙하), 3 = `Arena.summon_boss_now(rally_dummy_scene)` (`toolkit/rally_dummy/`: 반격 자세만 쓰고 쓰러지지 않는 가짜 보스, 수치는 `Tuning.apply(self, <원본 씬>)`으로 `knight_tuning.cfg`를 빌린다 — 폴더와 치트 항목을 지워도 본편은 그대로). 4~7 = Phase1 분대 인원 순환(그룹 `phase1`), 8 = `Main.cycle_level()` (그룹 `main`, Phase1 ↔ Arena). 발동하면 화면 위에 이름을 잠깐 띄운다.
 - **카유공(카운터 유도 공격)** — 감시자(`actors/enemies/watcher/`, 공중 원거리 중간 보스급 적 — 금장 갑각·가시 왕관·후광·칼날깃 날개, 잡몹보다 크다):
   - 평소: 플레이어 위쪽 옆(`hover_distance`/`hover_height`)을 떠다니며 바늘(`watcher_needle.gd/.tscn`, 닿기 직전 짧게 빛날 때만 튕겨내기로 지울 수 있다)을 쏜다. 날아다니므로 `_apply_gravity`를 감속으로 오버라이드하고 몸은 지형과 충돌하지 않는다(mask 0, `fly_bounds` 안에 머문다 — 레벨이 스폰 때 지정).
   - CHARGE 2초(금빛 입자가 점점 빠르게 몸 중앙으로, 공용 `combat/effects/counter_tell/` (`CounterTell`)) → WINDOW 0.4초(거대한 + 섬광 + 조준선) → 못 받아치면 히트스캔 광선(`watcher_beam.gd` 겉모습). CHARGE/WINDOW는 슈퍼아머.
@@ -317,7 +317,7 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
 
 ### Phase1 — 숲 (기본 실행 레벨)
 
-`app/main.tscn`은 이제 Arena 대신 `Phase1`을 인스턴스한다. Arena(`levels/arena/`)와 옛 적 4종(grunt/duelist/watcher/knight)은 지우지 않고 보존한다 — 위 트리는 Arena 기준 설명이다.
+`app/main.tscn`은 기본 Level로 `Phase1`을 인스턴스한다. Arena(`levels/arena/`)와 옛 적 4종(grunt/duelist/watcher/knight)도 그대로 살아 있어 개발 치트 8로 오가며 플레이한다 (`Main.levels` = [Phase1, Arena]) — 위 트리는 Arena 기준 설명이다.
 
 ```text
 Phase1 (Node2D)                               levels/phase1/phase1.tscn (phase1.gd, phase1_tuning.cfg = 분대 인원)

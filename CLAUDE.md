@@ -50,7 +50,7 @@ All damage flows through one path, provided in `combat/components/`: `HitboxComp
 
 Actors follow the vocabulary in `docs/structure.md`: `Visual` (only this flips with facing), `BodyCollision` (the `CollisionShape2D` itself — must be a direct child of the body), `Combat`, and `Sensors` / `Components` / `Audio` only when actually needed. An actor-specific skill lives in `actors/<actor>/abilities/<name>/` and moves to `combat/` only once a second user exists.
 
-To add a new level, create it under `levels/<name>/` with the level vocabulary (`World`, `Actors`, `Projectiles`, `Effects` as needed) and instance it as a child of `Main` in `app/main.tscn`. Runtime projectiles/effects are added to the level's `Projectiles` / `Effects` containers, not to the spawner's parent.
+To add a new level, create it under `levels/<name>/` with the level vocabulary (`World`, `Actors`, `Projectiles`, `Effects` as needed) and add it to `Main`'s `levels` export in `app/main.tscn` (`levels[0]` is the default level instanced as a child of `Main`; cheat 8 cycles the rest). Runtime projectiles/effects are added to the level's `Projectiles` / `Effects` containers, not to the spawner's parent.
 
 `addons/godot_mcp/` is the Godot MCP editor plugin (enabled in `project.godot` under `[editor_plugins]`). It is tooling, not game content — leave it out of the folder conventions in `docs/structure.md`.
 
