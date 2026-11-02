@@ -16,6 +16,7 @@ const CHEATS := {
 	KEY_4: "Phase1 Squad Size",
 	KEY_5: "Phase1 Assassins",
 	KEY_6: "Phase1 Crossbowmen",
+	KEY_7: "Phase1 Giants",
 }
 
 ## 치트 3: 반격 자세만 쓰는 불사의 가짜 보스 (toolkit/rally_dummy — 지워도 본편에 영향 없음)
@@ -71,6 +72,11 @@ func _run(code: Key) -> void:
 			var phase1 := get_tree().get_first_node_in_group("phase1") as Phase1
 			if phase1 != null:
 				_show("CHEAT 6: Phase1 Crossbowmen -> %d" % phase1.cycle_crossbows(), true)
+				return
+		KEY_7:
+			var phase1 := get_tree().get_first_node_in_group("phase1") as Phase1
+			if phase1 != null:
+				_show("CHEAT 7: Phase1 Giants -> %d" % phase1.cycle_giants(), true)
 				return
 	if not CHEATS.has(code):
 		_show("CHEAT %d: (none)" % (code - KEY_0), false)

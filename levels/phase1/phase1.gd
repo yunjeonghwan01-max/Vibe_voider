@@ -3,25 +3,29 @@ extends Node2D
 
 ## Phase1 — 숲 속 첫 스테이지 (제3왕자 휘하 제3부대). 게임을 켜면 이 레벨이 돈다 (app/main.tscn).
 ## 분대 = 보병 squad_size명(플레이어 양쪽에서 걸어온다) + 암살자 assassin_count명(멀리서 순보로 파고든다)
-##   + 석궁병 crossbow_count명(멀찍이 자리를 지키며 수평 볼트로 견제).
+##   + 석궁병 crossbow_count명(멀찍이 자리를 지키며 수평 볼트로 견제) + 거병 giant_count명(느리게 걸어오는 거구, 반동 2차 MCI).
 ## 분대를 모두 쓰러뜨리면 wave_delay 뒤 새 분대가 온다 (반복 플레이용 임시 흐름).
 ## 테스트: 시작 인원은 phase1_tuning.cfg, 치트 4(` + 4)는 보병 1 → 2 → 4 → 6 → 0명, 치트 5(` + 5)는 암살자 0 → 1 → 2 → 3명,
-## 치트 6(` + 6)은 석궁병 0 → 1 → 2 → 3명
+## 치트 6(` + 6)은 석궁병, 치트 7(` + 7)은 거병 0 → 1 → 2 → 3명
 ## — 누르면 지금 분대를 돌려보내고 새 인원으로 즉시 다시 부른다.
 ## 숲 배경은 코드로 그린 placeholder (toolkit/asset_gen/sprite_gen.gd의 _gen_forest) — 완성 아트가 아니다.
 
 const SQUAD_PRESETS: Array[int] = [1, 2, 4, 6, 0]
 const ASSASSIN_PRESETS: Array[int] = [0, 1, 2, 3]
 const CROSSBOW_PRESETS: Array[int] = [0, 1, 2, 3]
+const GIANT_PRESETS: Array[int] = [0, 1, 2, 3]
 
 @export var infantry_scene: PackedScene
 @export var assassin_scene: PackedScene
 @export var crossbowman_scene: PackedScene
+@export var giant_scene: PackedScene
 @export_range(0, 6) var squad_size: int = 4
 @export_range(0, 3) var assassin_count: int = 1
 @export var assassin_spawn_distance: float = 700.0   # 암살자는 멀리서 나타나 순보로 다가온다
 @export_range(0, 3) var crossbow_count: int = 1
 @export var crossbow_spawn_distance: float = 520.0   # 석궁병은 이만큼 떨어진 자리에 서서 지킨다
+@export_range(0, 3) var giant_count: int = 1
+@export var giant_spawn_distance: float = 600.0
 @export var wave_delay: float = 3.0
 @export var min_spawn_distance: float = 360.0   # 플레이어 바로 옆에서 튀어나오지 않게
 @export var spawn_row_gap: float = 90.0          # 같은 쪽에 서는 보병끼리의 등장 간격
@@ -89,6 +93,13 @@ func cycle_crossbows() -> int:
 	return crossbow_count
 
 
+## 치트/테스트: 거병 인원을 다음 프리셋(0 → 1 → 2 → 3)으로 바꾸고 분대를 즉시 다시 부른다.
+func cycle_giants() -> int:
+	giant_count = GIANT_PRESETS[(GIANT_PRESETS.find(giant_count) + 1) % GIANT_PRESETS.size()]
+	_respawn_now()
+	return giant_count
+
+
 func _respawn_now() -> void:
 	for n in get_tree().get_nodes_in_group("enemy"):
 		var e := n as Enemy
@@ -111,6 +122,10 @@ func _spawn_squad() -> void:
 		var s := -side if i % 2 == 0 else side
 		var x := clampf(player.global_position.x + s * (crossbow_spawn_distance + floori(i / 2.0) * 160.0), room_x.x + 80.0, room_x.y - 80.0)
 		_spawn_enemy(crossbowman_scene, Vector2(x, spawn_y))
+	for i in giant_count:
+		var s := side if i % 2 == 0 else -side
+		var x := clampf(player.global_position.x + s * (giant_spawn_distance + floori(i / 2.0) * 160.0), room_x.x + 100.0, room_x.y - 100.0)
+		_spawn_enemy(giant_scene, Vector2(x, spawn_y - 24.0))
 
 
 ## 플레이어 양쪽에 번갈아 세운다 (넓은 쪽부터). 한쪽이 벽에 막히면 반대편에 선다.

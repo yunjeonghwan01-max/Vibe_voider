@@ -38,7 +38,11 @@ VOIDER 치트 목록 (개발/플레이 테스트용)
           같은 방식으로 석궁병 0 → 1 → 2 → 3명. 보병·암살자를 0으로 두면 석궁병만 단독 테스트.
           시작 인원은 phase1_tuning.cfg의 crossbow_count.
 
-  ` + 7 ~ 9   (비어 있음)
+  ` + 7   Phase1 거병 인원 바꾸기 (Phase1 전용)
+          같은 방식으로 거병 0 → 1 → 2 → 3명. 다른 적을 0으로 두면 거병만 단독 테스트.
+          시작 인원은 phase1_tuning.cfg의 giant_count.
+
+  ` + 8 ~ 9   (비어 있음)
 
 참고
   - 치트 관리 코드: toolkit/cheats.gd (Toolkit 씬의 Cheats 노드)

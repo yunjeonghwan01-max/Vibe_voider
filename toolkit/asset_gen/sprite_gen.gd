@@ -17,7 +17,7 @@ var rng := RandomNumberGenerator.new()
 func _init() -> void:
 	rng.seed = 7
 	for dir in ["characters/player", "characters/grunt", "characters/duelist", "characters/watcher", "characters/knight",
-			"characters/infantry", "characters/assassin", "characters/crossbowman", "environment", "effects"]:
+			"characters/infantry", "characters/assassin", "characters/crossbowman", "characters/giant", "environment", "effects"]:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT + dir))
 	var only := OS.get_cmdline_user_args()
 	if not only.is_empty():
@@ -38,6 +38,7 @@ func _init() -> void:
 	_gen_forest()
 	_gen_assassin()
 	_gen_crossbowman()
+	_gen_giant()
 	print("[sprite_gen] done")
 	quit()
 
@@ -2036,4 +2037,132 @@ func _crossbow() -> Image:
 	_rect(img, 12, cy - 2, 12, 1, _c(150, 156, 166))               # 걸린 볼트
 	_put(img, 24, cy - 2, _c(236, 240, 246))
 	_outline(img, _c(8, 8, 12))
+	return img
+
+
+# ═══════════════════════════════ Phase1 — 제3부대 거병 ═══════════════════════════════
+# 거대한 몸집의 같은 제복(초록 포인트), 각지고 별 무늬가 있는 가면, 매우 거대한 금빛 한손 양날도끼(따로 그려 회전).
+# 프레임 48x64, 발바닥 = 62행, 몸 중심 x = 22. 씬에서 Body는 (0, 50)에 offset (-22, -62), scale 2.
+# → 아트 (x, y) = 로컬 (2x - 44, 2y - 74). giant.gd의 HAND는 각 프레임 "hand"를 이 식으로 옮긴 값이다.
+func _gen_giant() -> void:
+	rng.seed = 7701
+	var specs := [
+		{"hand": Vector2(31, 38)},                                                # 0 idle a
+		{"hand": Vector2(31, 38), "breath": 1},                                   # 1 idle b
+		{"hand": Vector2(31, 37), "stride": 4.0, "bob": -1},                      # 2 walk
+		{"hand": Vector2(31, 38)},                                                # 3 walk
+		{"hand": Vector2(31, 37), "stride": -4.0, "bob": -1},                     # 4 walk
+		{"hand": Vector2(31, 38)},                                                # 5 walk
+		{"hand": Vector2(30, 42), "crouch": 4, "lean": 2.0, "stride": 4.0},       # 6 crouch (돌진 준비)
+		{"hand": Vector2(34, 38), "crouch": 2, "lean": 6.0, "stride": 7.0},       # 7 charge
+		{"hand": Vector2(22, 8), "lean": -3.0, "stride": 4.0},                    # 8 raise (도끼를 머리 위 뒤로)
+		{"hand": Vector2(36, 40), "crouch": 4, "lean": 5.0, "stride": 7.0},       # 9 chop (내려찍은 자세)
+		{"hand": Vector2(38, 46), "crouch": 5, "lean": 9.0, "stride": 8.0},       # 10 stumble (앞으로 넘어갈 듯)
+		{"hand": Vector2(27, 44), "crouch": 2, "lean": -4.0, "stride": -2.0},     # 11 hurt / 기절
+	]
+	var frames: Array[Image] = []
+	for sp in specs:
+		frames.append(_giant_frame(sp))
+	_save(_sheet(frames), "characters/giant/giant.png")
+	_save(_giant_axe(), "characters/giant/giant_axe.png")
+
+
+func _giant_frame(p: Dictionary) -> Image:
+	var img := _new(48, 64)
+	var coat := _c(46, 52, 66)
+	var trouser := _c(30, 32, 42)
+	var boot := _c(14, 14, 18)
+	var green := _c(58, 118, 78)
+	var mask := _c(198, 192, 174)
+	var mask_d := _c(136, 130, 116)
+	var slit := _c(10, 12, 12)
+	var glove := _c(26, 26, 30)
+	var crouch: float = p.get("crouch", 0) + p.get("breath", 0) * 0.5
+	var lean: float = p.get("lean", 0.0)
+	var stride: float = p.get("stride", 0.0)
+	var bob: float = p.get("bob", 0)
+	var hand: Vector2 = p["hand"]
+	var ground := 62.0
+	var cx := 22.0
+	var hip_y := 44.0 + crouch + bob
+	var sh := func(v: Vector2) -> Vector2:
+		var y := v.y + crouch + bob
+		var t := clampf((hip_y - y) / 36.0, 0.0, 1.0)
+		return Vector2(v.x + lean * t, y)
+
+	_line(img, sh.call(Vector2(cx - 6, 24)), hand + Vector2(-2, 1), 5.5, coat.darkened(0.35))   # 뒷팔
+	var back_foot := Vector2(cx - 4 - stride, ground - 2)
+	var front_foot := Vector2(cx + 4 + stride, ground - 2)
+	_line(img, Vector2(cx - 4, hip_y), back_foot, 6.0, trouser.darkened(0.3))
+	_line(img, Vector2(cx + 4, hip_y), front_foot, 6.0, trouser)
+	_rect(img, int(back_foot.x) - 4, int(ground) - 4, 9, 4, boot.darkened(0.2))
+	_rect(img, int(front_foot.x) - 3, int(ground) - 4, 9, 4, boot)
+	# 넓은 몸통 (두꺼운 어깨, 불룩한 배)
+	var body := PackedVector2Array()
+	for v in [Vector2(cx - 11, 20), Vector2(cx + 10, 20), Vector2(cx + 12, 28), Vector2(cx + 12, 38), Vector2(cx + 10, 48),
+			Vector2(cx - 10, 48), Vector2(cx - 12, 38), Vector2(cx - 13, 28)]:
+		body.append(sh.call(v))
+	_poly(img, body, coat)
+	for y in 64:
+		var back: Vector2 = sh.call(Vector2(cx - 4, y - crouch - bob))
+		for x in 48:
+			if x < back.x and img.get_pixel(x, y).is_equal_approx(coat):
+				img.set_pixel(x, y, coat.darkened(0.22))
+	_poly(img, PackedVector2Array([sh.call(Vector2(cx - 12.5, 40)), sh.call(Vector2(cx + 12, 40)),
+			sh.call(Vector2(cx + 12, 43)), sh.call(Vector2(cx - 12.5, 43))]), green)              # 넓은 초록 허리띠
+	_rect(img, int(sh.call(Vector2(cx + 3, 40)).x), int(sh.call(Vector2(cx, 40)).y), 4, 3, _c(196, 160, 70))   # 금 버클
+	for y in [25, 30, 35]:
+		var b: Vector2 = sh.call(Vector2(cx + 6, y))
+		_rect(img, int(b.x), int(b.y), 2, 1, _c(150, 156, 160))
+	_poly(img, PackedVector2Array([sh.call(Vector2(cx + 2, 18.5)), sh.call(Vector2(cx + 12, 18.5)),
+			sh.call(Vector2(cx + 13, 22)), sh.call(Vector2(cx + 2, 22))]), green.darkened(0.1))   # 견장
+	_poly(img, PackedVector2Array([sh.call(Vector2(cx - 6, 17)), sh.call(Vector2(cx + 7, 17)),
+			sh.call(Vector2(cx + 7, 21)), sh.call(Vector2(cx - 6, 21))]), green)                  # 깃
+	# 머리: 짧게 깎은 뒷머리 + 각진 큰 가면(별 무늬)
+	var hc: Vector2 = sh.call(Vector2(cx + 2, 11))
+	_ellipse(img, hc.x - 2, hc.y, 7.0, 7.5, _c(28, 28, 34))
+	_poly(img, PackedVector2Array([hc + Vector2(-4, -7), hc + Vector2(7, -7), hc + Vector2(8, -5), hc + Vector2(8, 6),
+			hc + Vector2(6, 8), hc + Vector2(-3, 8), hc + Vector2(-4, 6)]), mask)
+	_rect(img, int(hc.x - 4), int(hc.y - 6), 2, 13, mask_d)
+	_rect(img, int(hc.x - 1), int(hc.y - 2), 8, 1, mask_d)
+	_rect(img, int(hc.x), int(hc.y - 1), 3, 1, slit)
+	_rect(img, int(hc.x + 5), int(hc.y - 1), 3, 1, slit)
+	_rect(img, int(hc.x - 1), int(hc.y + 5), 8, 1, mask_d)
+	var star := PackedVector2Array()
+	var sc := hc + Vector2(3.5, -4.5)
+	for i in 10:
+		var r := 2.6 if i % 2 == 0 else 1.1
+		star.append(sc + Vector2.from_angle(-PI / 2.0 + i * PI / 5.0) * r)
+	_poly(img, star, green)                                                                      # 이마의 별
+	_line(img, hc + Vector2(3.5, 1), hc + Vector2(3.5, 4), 1.0, mask_d)                          # 콧날
+	# 앞팔 (굵게) + 초록 소맷부리 + 장갑
+	var fs: Vector2 = sh.call(Vector2(cx + 6, 24))
+	_line(img, fs, hand, 6.0, coat)
+	_line(img, fs.lerp(hand, 0.74), fs.lerp(hand, 0.88), 6.4, green)
+	_ellipse(img, hand.x, hand.y, 3.0, 3.0, glove)
+	_shade_edges(img, 0.2, 0.25, [slit, green, green.darkened(0.1), _c(196, 160, 70)])
+	_outline(img, _c(8, 8, 12))
+	return img
+
+
+## 거대한 금빛 한손 양날도끼 — 회전축 = 손잡이 끝 쪽 (4, 15). 도끼머리 중심까지 28 아트px = 56 로컬px.
+func _giant_axe() -> Image:
+	var img := _new(42, 31)
+	var gold := _c(226, 184, 84)
+	var gold_l := _c(252, 222, 140)
+	var gold_d := _c(150, 104, 44)
+	var cy := 15
+	_rect(img, 1, cy - 1, 30, 3, _c(70, 46, 32))                   # 자루
+	for x in [3, 6, 9]:
+		_rect(img, x, cy - 1, 1, 3, _c(40, 70, 52))                 # 초록 감개
+	_rect(img, 0, cy - 2, 2, 5, gold_d)                             # 자루 끝
+	_rect(img, 28, cy - 4, 6, 9, gold_d)                            # 도끼머리 몸
+	# 양날 — 위아래로 크게 휜 초승달 날
+	for side in [-1.0, 1.0]:
+		var pts := PackedVector2Array([Vector2(27, cy + side * 3), Vector2(35, cy + side * 3), Vector2(40, cy + side * 14),
+				Vector2(31, cy + side * 11), Vector2(22, cy + side * 14)])
+		_poly(img, pts, gold)
+		_line(img, Vector2(22, cy + side * 14), Vector2(40, cy + side * 14), 1.0, gold_l)   # 날 끝 반짝
+	_rect(img, 30, cy - 1, 2, 3, gold_l)
+	_outline(img, _c(30, 18, 8))
 	return img
