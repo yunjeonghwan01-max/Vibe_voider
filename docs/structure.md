@@ -315,6 +315,26 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
 
 ---
 
+### Phase1 — 숲 (기본 실행 레벨)
+
+`app/main.tscn`은 이제 Arena 대신 `Phase1`을 인스턴스한다. Arena(`levels/arena/`)와 옛 적 4종(grunt/duelist/watcher/knight)은 지우지 않고 보존한다 — 위 트리는 Arena 기준 설명이다.
+
+```text
+Phase1 (Node2D)                               levels/phase1/phase1.tscn (phase1.gd, phase1_tuning.cfg = 분대 인원)
+├── World          SkyLayer(Far, MoonGlow — 시차) / Trees / LightShafts / Fireflies / Ground / LeftWall·RightWall (숲 벽) / Foreground(잎·고사리 — 시차)
+├── Actors └ Player
+├── Projectiles (group "projectiles")   Effects (group "fx")   GameCamera (room_limits ±1140)   Vignette   Hud   Audio/Music
+```
+
+- 숲 그림과 제3부대 그림은 `toolkit/asset_gen/sprite_gen.gd`가 코드로 그린 placeholder다 (`-- infantry forest assassin crossbowman giant`로 일부만 다시 그린다).
+- 적은 레벨 스크립트가 분대 단위로 스폰하고 `enemy` 그룹에 넣는다 (`field_mob`은 각 적 씬에 들어 있다). 분대를 전멸시키면 `wave_delay` 뒤 새 분대. 치트 4~7이 종류별 인원을 바꾼다 (`docs/cheats.txt`).
+- 제3부대 적 (`actors/enemies/<name>/`, 각자 `<name>_tuning.cfg`) — 모두 `Enemy` 직속 하위 클래스, 공통 Hitbox→Hurtbox→Health 경로:
+  - `infantry` 보병: 걸어와 느리고 넉넉한 단일 MCI 내려베기.
+  - `assassin` 암살자: 수평 순보로 접근, 가까우면 아주 빠른 순보로 플레이어 등 뒤를 잡고 단일 MCI 찌르기. 순보 중에도 언제나 맞는다.
+  - `crossbowman` 석궁병: 같은 수평선 + 지형에 막히지 않은 사선에서만 경고 BAR 뒤 볼트 발사. `CrossbowBolt`는 `WatcherNeedle`을 상속해 기존 PRCI(`deflectable`)를 그대로 쓴다. 붙으면 쿨다운 후퇴 순보.
+  - `giant` 거병: 같은 바닥일 때만 돌진(이동만). 1차 MCI를 반격당하면 기절 대신 비틀 → 반동 2차 MCI(새 FLASH, 연쇄 예약 창 밖). 2차까지 받아치면 긴 기절. 분기는 `Giant.on_parried()`에만 있다.
+- 가독성 조정: 보병·암살자·거병은 다른 제3부대가 막 공격을 치켜들었으면 `crowd_attack_gap`만큼 기다린다 (패턴이 아니라 반짝임 겹침 방지).
+
 ## 6. 엔진 제약에 따른 예외
 
 | 항목 | 내용 | 이유 |
