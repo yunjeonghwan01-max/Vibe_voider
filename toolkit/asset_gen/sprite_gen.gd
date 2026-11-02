@@ -17,7 +17,7 @@ var rng := RandomNumberGenerator.new()
 func _init() -> void:
 	rng.seed = 7
 	for dir in ["characters/player", "characters/grunt", "characters/duelist", "characters/watcher", "characters/knight",
-			"characters/infantry", "environment", "effects"]:
+			"characters/infantry", "characters/assassin", "environment", "effects"]:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT + dir))
 	var only := OS.get_cmdline_user_args()
 	if not only.is_empty():
@@ -36,6 +36,7 @@ func _init() -> void:
 	_gen_knight()
 	_gen_infantry()  # Phase1 생성기는 각자 rng.seed를 다시 정해 단독 실행과 같은 그림이 나온다
 	_gen_forest()
+	_gen_assassin()
 	print("[sprite_gen] done")
 	quit()
 
@@ -1814,3 +1815,109 @@ func _gen_forest_leaves() -> void:
 			if s % 5 == 0:
 				_ellipse(img, x0 + sin(s * 0.2 + i) + 1.5, 14 + s, 1.8, 1.1, col)
 	_save(img, "environment/forest_leaves.png")
+
+
+# ═══════════════════════════════ Phase1 — 제3부대 암살자 ═══════════════════════════════
+# 보병보다 가는 실루엣: 같은 제복(초록 포인트) 위에 뒤집어쓴 두건 망토, 앞으로 뾰족한 가면, 한손 단검.
+# 프레임 34x50, 발바닥 = 48행, 몸 중심 x = 17. 씬에서 Body는 (0, 28)에 offset (-17, -48), scale 2.
+# → 아트 (x, y) = 로컬 (2x - 34, 2y - 68). assassin.gd의 HAND는 각 프레임 "hand"를 이 식으로 옮긴 값이다.
+func _gen_assassin() -> void:
+	rng.seed = 5501
+	var specs := [
+		{"hand": Vector2(22, 30), "flutter": 0.5},                                         # 0 idle a
+		{"hand": Vector2(22, 30), "breath": 1, "flutter": 1.0},                            # 1 idle b
+		{"hand": Vector2(13, 31), "lean": 5.0, "stride": 5.0, "flutter": 6.0},             # 2 dash (순보)
+		{"hand": Vector2(22, 33), "crouch": 3, "lean": 2.0, "stride": 3.0, "flutter": 2.0},  # 3 crouch (도착)
+		{"hand": Vector2(14, 12), "lean": -2.0, "stride": 3.0, "flutter": 1.5},            # 4 raise (단검을 치켜듦)
+		{"hand": Vector2(29, 27), "lean": 5.0, "stride": 6.0, "crouch": 2, "flutter": 3.0},  # 5 stab
+		{"hand": Vector2(19, 34), "lean": -3.0, "stride": -1.5, "crouch": 1, "flutter": 2.0},  # 6 hurt / 기절
+	]
+	var frames: Array[Image] = []
+	for sp in specs:
+		frames.append(_assassin_frame(sp))
+	_save(_sheet(frames), "characters/assassin/assassin.png")
+	_save(_assassin_dagger(), "characters/assassin/assassin_dagger.png")
+
+
+func _assassin_frame(p: Dictionary) -> Image:
+	var img := _new(34, 50)
+	var cloak := _c(26, 34, 32)
+	var uniform := _c(42, 48, 60)
+	var trouser := _c(28, 30, 38)
+	var boot := _c(14, 14, 18)
+	var green := _c(58, 118, 78)
+	var mask := _c(206, 200, 184)
+	var mask_d := _c(140, 134, 122)
+	var slit := _c(10, 12, 12)
+	var glove := _c(24, 24, 28)
+	var crouch: float = p.get("crouch", 0) + p.get("breath", 0) * 0.5
+	var lean: float = p.get("lean", 0.0)
+	var stride: float = p.get("stride", 0.0)
+	var flutter: float = p.get("flutter", 0.0)
+	var hand: Vector2 = p["hand"]
+	var ground := 48.0
+	var cx := 17.0
+	var hip_y := 33.0 + crouch
+	var sh := func(v: Vector2) -> Vector2:
+		var y := v.y + crouch
+		var t := clampf((hip_y - y) / 26.0, 0.0, 1.0)
+		return Vector2(v.x + lean * t, y)
+
+	# 등 뒤로 늘어진 망토 (가장 뒤)
+	var n: Vector2 = sh.call(Vector2(cx - 2, 13))
+	_poly(img, PackedVector2Array([n + Vector2(2, 0), n + Vector2(-6 - flutter, 5), n + Vector2(-8 - flutter * 1.5, 18 - flutter * 0.7),
+			n + Vector2(-5 - flutter, 23 - flutter * 0.5), n + Vector2(-1, 21), n + Vector2(3, 8)]), cloak.darkened(0.2))
+	# 뒷팔
+	_line(img, sh.call(Vector2(cx - 2, 20)), hand + Vector2(-1, 1), 2.6, uniform.darkened(0.35))
+	# 다리 (가늘게) + 군화
+	var back_foot := Vector2(cx - 2 - stride, ground - 2)
+	var front_foot := Vector2(cx + 3 + stride, ground - 2)
+	_line(img, Vector2(cx - 1, hip_y), back_foot, 2.8, trouser.darkened(0.3))
+	_line(img, Vector2(cx + 2, hip_y), front_foot, 2.8, trouser)
+	_rect(img, int(back_foot.x) - 2, int(ground) - 2, 5, 2, boot.darkened(0.2))
+	_rect(img, int(front_foot.x) - 1, int(ground) - 2, 5, 2, boot)
+	# 몸통 (좁은 제복) + 대각 초록 띠 + 허리띠
+	var body := PackedVector2Array()
+	for v in [Vector2(cx - 5, 18), Vector2(cx + 5, 18), Vector2(cx + 5, 26), Vector2(cx + 4, 34), Vector2(cx - 5, 34), Vector2(cx - 6, 26)]:
+		body.append(sh.call(v))
+	_poly(img, body, uniform)
+	_line(img, sh.call(Vector2(cx - 4, 19)), sh.call(Vector2(cx + 4, 29)), 1.4, green)
+	_poly(img, PackedVector2Array([sh.call(Vector2(cx - 5.5, 30)), sh.call(Vector2(cx + 5, 30)),
+			sh.call(Vector2(cx + 5, 31.5)), sh.call(Vector2(cx - 5.5, 31.5))]), green.darkened(0.2))
+	# 어깨를 덮는 짧은 망토
+	var s0: Vector2 = sh.call(Vector2(cx - 6, 17))
+	var s1: Vector2 = sh.call(Vector2(cx + 5, 17))
+	_poly(img, PackedVector2Array([s0, s1, s1 + Vector2(1, 4), s0 + Vector2(-1, 6)]), cloak)
+	# 두건 (뒤로 뾰족) + 초록 테두리
+	var hc: Vector2 = sh.call(Vector2(cx + 1, 11))
+	_ellipse(img, hc.x - 0.5, hc.y, 5.5, 6.2, cloak)
+	_poly(img, PackedVector2Array([hc + Vector2(-3, -5), hc + Vector2(-10 - flutter * 0.4, -2), hc + Vector2(-4, 2)]), cloak)
+	_line(img, hc + Vector2(1, -6), hc + Vector2(5, -2), 1.0, green)
+	# 날카로운 가면 — 앞으로 뾰족하게 나온 코, 비스듬한 눈구멍
+	_poly(img, PackedVector2Array([hc + Vector2(0, -3), hc + Vector2(4, -3), hc + Vector2(9, 1), hc + Vector2(5, 3),
+			hc + Vector2(4, 6), hc + Vector2(0, 5)]), mask)
+	_rect(img, int(hc.x), int(hc.y - 2), 1, 7, mask_d)
+	_line(img, hc + Vector2(2, -1), hc + Vector2(6, 0), 1.0, slit)
+	# 앞팔 + 초록 소맷부리 + 장갑
+	var fs: Vector2 = sh.call(Vector2(cx + 3, 20))
+	_line(img, fs, hand, 2.8, uniform)
+	_line(img, fs.lerp(hand, 0.72), fs.lerp(hand, 0.86), 3.2, green)
+	_ellipse(img, hand.x, hand.y, 1.7, 1.7, glove)
+	_shade_edges(img, 0.2, 0.25, [slit, green, green.darkened(0.2)])
+	_outline(img, _c(8, 8, 12))
+	return img
+
+
+## 한손 단검 — 회전축 = 손잡이 가운데 (3.5, 3.5). 칼끝까지 ≈ 13 아트px = 26 로컬px (assassin.gd의 DAGGER_REACH).
+func _assassin_dagger() -> Image:
+	var img := _new(19, 7)
+	var cy := 3
+	_put(img, 1, cy, _c(92, 94, 102))                             # 폼멜
+	_rect(img, 2, 2, 4, 2, _c(34, 56, 42))                         # 손잡이 (초록 감개)
+	_rect(img, 6, 1, 1, 5, _c(70, 72, 82))                         # 가드
+	for x in range(7, 16):
+		_put(img, x, cy - 1, _c(206, 210, 216))
+		_put(img, x, cy, _c(140, 146, 156) if x < 15 else _c(206, 210, 216))
+	_put(img, 16, cy - 1, _c(230, 234, 240))
+	_outline(img, _c(8, 8, 12))
+	return img
