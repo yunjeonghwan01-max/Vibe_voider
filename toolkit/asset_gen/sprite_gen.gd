@@ -17,7 +17,7 @@ var rng := RandomNumberGenerator.new()
 func _init() -> void:
 	rng.seed = 7
 	for dir in ["characters/player", "characters/grunt", "characters/duelist", "characters/watcher", "characters/knight",
-			"characters/infantry", "characters/assassin", "environment", "effects"]:
+			"characters/infantry", "characters/assassin", "characters/crossbowman", "environment", "effects"]:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT + dir))
 	var only := OS.get_cmdline_user_args()
 	if not only.is_empty():
@@ -37,6 +37,7 @@ func _init() -> void:
 	_gen_infantry()  # Phase1 생성기는 각자 rng.seed를 다시 정해 단독 실행과 같은 그림이 나온다
 	_gen_forest()
 	_gen_assassin()
+	_gen_crossbowman()
 	print("[sprite_gen] done")
 	quit()
 
@@ -1919,5 +1920,120 @@ func _assassin_dagger() -> Image:
 		_put(img, x, cy - 1, _c(206, 210, 216))
 		_put(img, x, cy, _c(140, 146, 156) if x < 15 else _c(206, 210, 216))
 	_put(img, 16, cy - 1, _c(230, 234, 240))
+	_outline(img, _c(8, 8, 12))
+	return img
+
+
+# ═══════════════════════════════ Phase1 — 제3부대 석궁병 ═══════════════════════════════
+# 보병과 같은 단정한 제복(초록 포인트) + 둥근 챙 없는 군모, 각지면서도 둥근 가면, 은제 석궁(따로 그려 회전).
+# 프레임 34x50, 발바닥 = 48행, 몸 중심 x = 17. 씬에서 Body는 (0, 28)에 offset (-17, -48), scale 2.
+# → 아트 (x, y) = 로컬 (2x - 34, 2y - 68). crossbowman.gd의 HAND는 각 프레임 "hand"를 이 식으로 옮긴 값이다.
+func _gen_crossbowman() -> void:
+	rng.seed = 6601
+	var specs := [
+		{"hand": Vector2(23, 30)},                                              # 0 idle a
+		{"hand": Vector2(23, 30), "breath": 1},                                 # 1 idle b
+		{"hand": Vector2(24, 29), "crouch": 2, "stride": 4.0, "lean": 1.0},     # 2 aim (가슴 높이로 겨눔)
+		{"hand": Vector2(21, 32), "crouch": 1, "lean": 1.5},                    # 3 reload (아래로 숙여 장전)
+		{"hand": Vector2(20, 28), "lean": -4.0, "stride": -3.0},                # 4 retreat (뒤로 순보)
+		{"hand": Vector2(19, 33), "lean": -3.0, "stride": -1.5, "crouch": 1},   # 5 hurt / 기절
+	]
+	var frames: Array[Image] = []
+	for sp in specs:
+		frames.append(_crossbowman_frame(sp))
+	_save(_sheet(frames), "characters/crossbowman/crossbowman.png")
+	_save(_crossbow(), "characters/crossbowman/crossbow.png")
+
+
+func _crossbowman_frame(p: Dictionary) -> Image:
+	var img := _new(34, 50)
+	var coat := _c(46, 52, 66)
+	var trouser := _c(30, 32, 42)
+	var boot := _c(14, 14, 18)
+	var green := _c(58, 118, 78)
+	var cap := _c(30, 34, 44)
+	var mask := _c(204, 198, 182)
+	var mask_d := _c(140, 134, 122)
+	var slit := _c(10, 12, 12)
+	var glove := _c(26, 26, 30)
+	var crouch: float = p.get("crouch", 0) + p.get("breath", 0) * 0.5
+	var lean: float = p.get("lean", 0.0)
+	var stride: float = p.get("stride", 0.0)
+	var hand: Vector2 = p["hand"]
+	var ground := 48.0
+	var cx := 17.0
+	var hip_y := 33.0 + crouch
+	var sh := func(v: Vector2) -> Vector2:
+		var y := v.y + crouch
+		var t := clampf((hip_y - y) / 26.0, 0.0, 1.0)
+		return Vector2(v.x + lean * t, y)
+
+	_line(img, sh.call(Vector2(cx - 3, 20)), hand + Vector2(-1, 1), 3.0, coat.darkened(0.35))
+	var back_foot := Vector2(cx - 2 - stride, ground - 2)
+	var front_foot := Vector2(cx + 3 + stride, ground - 2)
+	_line(img, Vector2(cx - 2, hip_y), back_foot, 3.2, trouser.darkened(0.3))
+	_line(img, Vector2(cx + 2, hip_y), front_foot, 3.2, trouser)
+	_rect(img, int(back_foot.x) - 2, int(ground) - 2, 6, 2, boot.darkened(0.2))
+	_rect(img, int(front_foot.x) - 1, int(ground) - 2, 6, 2, boot)
+	# 짧은 제복 상의 (보병보다 짧고 허리가 잘록) + 화살통 띠
+	var body := PackedVector2Array()
+	for v in [Vector2(cx - 6, 18), Vector2(cx + 5, 18), Vector2(cx + 6, 24), Vector2(cx + 5, 30), Vector2(cx + 6, 36),
+			Vector2(cx - 6, 36), Vector2(cx - 6, 30), Vector2(cx - 7, 24)]:
+		body.append(sh.call(v))
+	_poly(img, body, coat)
+	for y in 50:
+		var back: Vector2 = sh.call(Vector2(cx - 2, y - crouch))
+		for x in 34:
+			if x < back.x and img.get_pixel(x, y).is_equal_approx(coat):
+				img.set_pixel(x, y, coat.darkened(0.22))
+	_line(img, sh.call(Vector2(cx + 4, 19)), sh.call(Vector2(cx - 5, 31)), 1.4, green.darkened(0.15))   # 어깨띠
+	_poly(img, PackedVector2Array([sh.call(Vector2(cx - 6.5, 30)), sh.call(Vector2(cx + 6, 30)),
+			sh.call(Vector2(cx + 6, 31.5)), sh.call(Vector2(cx - 6.5, 31.5))]), green)
+	# 등의 화살통 (짧은 볼트 깃이 삐죽)
+	var qv: Vector2 = sh.call(Vector2(cx - 7, 20))
+	_rect(img, int(qv.x) - 2, int(qv.y), 3, 11, _c(40, 34, 30))
+	for k in 3:
+		_put(img, int(qv.x) - 2 + k, int(qv.y) - 1 - (k % 2), _c(180, 186, 190))
+	_poly(img, PackedVector2Array([sh.call(Vector2(cx - 4, 16.5)), sh.call(Vector2(cx + 5, 16.5)),
+			sh.call(Vector2(cx + 5, 19)), sh.call(Vector2(cx - 4, 19))]), green)
+	# 머리: 둥근 군모(초록 띠) + 각지면서도 둥근 가면 (넓은 눈구멍 둘)
+	var hc: Vector2 = sh.call(Vector2(cx + 1, 11))
+	_ellipse(img, hc.x - 1, hc.y, 5.0, 5.5, cap.darkened(0.35))
+	_ellipse(img, hc.x - 0.5, hc.y - 4.5, 6.0, 3.6, cap)
+	_rect(img, int(hc.x - 6), int(hc.y - 3), 12, 2, green)
+	_poly(img, PackedVector2Array([hc + Vector2(-2, -2), hc + Vector2(4, -2), hc + Vector2(6, 0), hc + Vector2(6.5, 3),
+			hc + Vector2(5, 6), hc + Vector2(1, 7), hc + Vector2(-2, 6)]), mask)
+	_rect(img, int(hc.x - 2), int(hc.y - 1), 2, 7, mask_d)
+	_rect(img, int(hc.x + 1), int(hc.y), 2, 2, slit)
+	_rect(img, int(hc.x + 4), int(hc.y), 2, 2, slit)
+	_rect(img, int(hc.x + 1), int(hc.y + 4), 4, 1, mask_d)
+	# 앞팔
+	var fs: Vector2 = sh.call(Vector2(cx + 3, 20))
+	_line(img, fs, hand, 3.0, coat)
+	_line(img, fs.lerp(hand, 0.72), fs.lerp(hand, 0.86), 3.4, green)
+	_ellipse(img, hand.x, hand.y, 1.8, 1.8, glove)
+	_shade_edges(img, 0.2, 0.25, [slit, green, green.darkened(0.15)])
+	_outline(img, _c(8, 8, 12))
+	return img
+
+
+## 은제 석궁 — 회전축 = 손잡이 (5.5, 10). 볼트가 나가는 앞끝은 회전축에서 (18.5, -3.5) 아트px = (37, -7) 로컬px.
+func _crossbow() -> Image:
+	var img := _new(27, 15)
+	var silver := _c(196, 204, 214)
+	var silver_d := _c(120, 128, 142)
+	var cy := 7
+	_rect(img, 1, cy - 1, 21, 3, silver_d)                        # 몸체
+	_rect(img, 1, cy - 1, 21, 1, silver)
+	_rect(img, 4, cy + 2, 3, 4, _c(34, 56, 42))                    # 손잡이 (초록 감개)
+	_rect(img, 1, cy, 3, 3, silver_d.darkened(0.2))                # 개머리
+	for y in range(1, 14):                                         # 활대 (은빛, 위아래로 휜다)
+		var bend := int(round(absf(y - cy) * absf(y - cy) / 14.0))
+		_put(img, 21 - bend, y, silver)
+		_put(img, 22 - bend, y, silver_d)
+	_line(img, Vector2(18, 1.5), Vector2(11, cy + 0.5), 1.0, _c(220, 224, 228))   # 시위
+	_line(img, Vector2(18, 13.5), Vector2(11, cy + 0.5), 1.0, _c(220, 224, 228))
+	_rect(img, 12, cy - 2, 12, 1, _c(150, 156, 166))               # 걸린 볼트
+	_put(img, 24, cy - 2, _c(236, 240, 246))
 	_outline(img, _c(8, 8, 12))
 	return img

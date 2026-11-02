@@ -5,6 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://cfpo0llem30uy" path="res://actors/player/player.tscn" id="3_player"]
 [ext_resource type="PackedScene" uid="uid://cfmdhfvl16emi" path="res://ui/hud/hud.tscn" id="4_hud"]
 [ext_resource type="PackedScene" uid="uid://c3uhrtvea8mh1" path="res://actors/enemies/assassin/assassin.tscn" id="5_assassin"]
+[ext_resource type="PackedScene" uid="uid://7c46a5egmwaa" path="res://actors/enemies/crossbowman/crossbowman.tscn" id="5_crossbow"]
 [ext_resource type="PackedScene" uid="uid://c7nqgrb65tuyi" path="res://actors/enemies/infantry/infantry.tscn" id="5_infantry"]
 [ext_resource type="AudioStream" uid="uid://bxcfly0xthxyk" path="res://assets/temporary/audio/music_loop.wav" id="a_music"]
 [ext_resource type="Texture2D" uid="uid://dlw0ev4shwoir" path="res://assets/temporary/environment/forest_edge.png" id="t_edge"]
@@ -55,6 +56,7 @@ fill_to = Vector2(1, 1)
 script = ExtResource("1_phase1")
 infantry_scene = ExtResource("5_infantry")
 assassin_scene = ExtResource("5_assassin")
+crossbowman_scene = ExtResource("5_crossbow")
 
 [node name="World" type="Node2D" parent="." unique_id=272644040]
 
