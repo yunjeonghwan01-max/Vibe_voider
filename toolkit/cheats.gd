@@ -18,6 +18,7 @@ const CHEATS := {
 	KEY_6: "Phase1 Crossbowmen",
 	KEY_7: "Phase1 Giants",
 	KEY_8: "Switch Level (Phase1 <-> Arena)",
+	KEY_9: "Prince Boss",
 }
 
 ## 치트 3: 반격 자세만 쓰는 불사의 가짜 보스 (toolkit/rally_dummy — 지워도 본편에 영향 없음)
@@ -82,6 +83,13 @@ func _run(code: Key) -> void:
 		KEY_8:
 			var main := get_tree().get_first_node_in_group("main") as Main
 			ok = main != null and main.cycle_level() != ""
+		KEY_9:
+			var phase1 := get_tree().get_first_node_in_group("phase1") as Phase1
+			if phase1 != null:
+				var stage := phase1.prince_debug_next()
+				if not stage.is_empty():
+					_show("CHEAT 9: Prince -> %s" % stage, true)
+					return
 	if not CHEATS.has(code):
 		_show("CHEAT %d: (none)" % (code - KEY_0), false)
 	else:

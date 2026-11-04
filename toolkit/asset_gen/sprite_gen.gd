@@ -17,7 +17,8 @@ var rng := RandomNumberGenerator.new()
 func _init() -> void:
 	rng.seed = 7
 	for dir in ["characters/player", "characters/grunt", "characters/duelist", "characters/watcher", "characters/knight",
-			"characters/infantry", "characters/assassin", "characters/crossbowman", "characters/giant", "environment", "effects"]:
+			"characters/infantry", "characters/assassin", "characters/crossbowman", "characters/giant", "characters/prince",
+			"environment", "effects"]:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT + dir))
 	var only := OS.get_cmdline_user_args()
 	if not only.is_empty():
@@ -39,6 +40,7 @@ func _init() -> void:
 	_gen_assassin()
 	_gen_crossbowman()
 	_gen_giant()
+	_gen_prince()
 	print("[sprite_gen] done")
 	quit()
 
@@ -2165,4 +2167,146 @@ func _giant_axe() -> Image:
 		_line(img, Vector2(22, cy + side * 14), Vector2(40, cy + side * 14), 1.0, gold_l)   # 날 끝 반짝
 	_rect(img, 30, cy - 1, 2, 3, gold_l)
 	_outline(img, _c(30, 18, 8))
+	return img
+
+
+# ═══════════════════════════════ Phase1 — 제3왕자 (보스) ═══════════════════════════════
+# 붉으스름한 머리, 밝은 초록 두건·긴 초록 망토, 금실 장식의 흰 귀족 복장을 입은 젊은 검사. 양손 장검은 따로 그려 회전한다.
+# 프레임 40x54, 발바닥 = 52행, 몸 중심 x = 20. 씬에서 Body는 (0, 30)에 offset (-20, -52), scale 2.
+# → 아트 (x, y) = 로컬 (2x - 40, 2y - 74). prince.gd의 HAND는 각 프레임 "hand"를 이 식으로 옮긴 값이다.
+func _gen_prince() -> void:
+	rng.seed = 7301
+	var specs := [
+		{"hand": Vector2(27, 34), "flutter": 1.0},                                                # 0 idle a
+		{"hand": Vector2(27, 35), "breath": 1, "flutter": 2.0},                                   # 1 idle b
+		{"hand": Vector2(12, 36), "lean": 6.0, "stride": 6.0, "flutter": 9.0, "two": true},       # 2 dash (순보)
+		{"hand": Vector2(13, 41), "crouch": 8, "lean": 6.0, "stride": 7.0, "flutter": 3.0, "two": true},   # 3 crouch (돌진 준비)
+		{"hand": Vector2(9, 39), "crouch": 6, "lean": 11.0, "stride": 10.0, "flutter": 12.0, "two": true},  # 4 rush
+		{"hand": Vector2(19, 9), "lean": -2.0, "stride": 3.0, "flutter": 2.0, "two": true},       # 5 raise (양손으로 치켜듦)
+		{"hand": Vector2(33, 31), "lean": 6.0, "stride": 6.0, "crouch": 2, "flutter": 5.0, "two": true},   # 6 strike
+		{"hand": Vector2(32, 44), "lean": 8.0, "stride": 7.0, "crouch": 6, "flutter": 6.0, "two": true},   # 7 low (바닥을 긋는다)
+		{"hand": Vector2(17, 21), "lean": -5.0, "stride": 5.0, "crouch": 1, "flutter": 4.0, "two": true},  # 8 recoil (버티며 되튕김 — 곧 재공격)
+		{"hand": Vector2(29, 47), "crouch": 7, "lean": 8.0, "stride": 3.0, "flutter": 1.0, "droop": true}, # 9 broken (자세 붕괴 — 끝났다)
+		{"hand": Vector2(20, 29), "tuck": true, "flutter": 7.0, "two": true},                     # 10 plunge (검을 아래로)
+		{"hand": Vector2(29, 42), "crouch": 9, "lean": 6.0, "stride": 6.0, "flutter": 2.0, "two": true},   # 11 impale (검을 지면에 꽂음)
+		{"hand": Vector2(31, 15), "lean": -4.0, "stride": 4.0, "flutter": 6.0},                   # 12 roar (페이즈 전환 포효)
+	]
+	var frames: Array[Image] = []
+	for sp in specs:
+		frames.append(_prince_frame(sp))
+	_save(_sheet(frames), "characters/prince/prince.png")
+	_save(_prince_sword(), "characters/prince/prince_sword.png")
+
+
+func _prince_frame(p: Dictionary) -> Image:
+	var img := _new(40, 54)
+	var hood := _c(92, 214, 96)
+	var hood_d := _c(52, 156, 76)
+	var cloak := _c(50, 158, 78)
+	var cloak_d := _c(30, 108, 60)
+	var coat := _c(232, 228, 214)
+	var coat_d := _c(176, 170, 160)
+	var gold := _c(232, 192, 86)
+	var trouser := _c(60, 66, 92)
+	var boot := _c(82, 54, 38)
+	var skin := _c(244, 206, 170)
+	var hair := _c(204, 84, 56)
+	var hair_d := _c(150, 52, 44)
+	var eye := _c(36, 72, 44)
+	var crouch: float = p.get("crouch", 0) + p.get("breath", 0) * 0.5
+	var lean: float = p.get("lean", 0.0)
+	var stride: float = p.get("stride", 0.0)
+	var flutter: float = p.get("flutter", 0.0)
+	var hand: Vector2 = p["hand"]
+	var tuck: bool = p.get("tuck", false)
+	var two: bool = p.get("two", false)
+	var droop: bool = p.get("droop", false)
+	var ground := 52.0
+	var cx := 20.0
+	var hip_y := 35.0 + crouch
+	var sh := func(v: Vector2) -> Vector2:
+		var y := v.y + crouch
+		var t := clampf((hip_y - y) / 28.0, 0.0, 1.0)
+		return Vector2(v.x + lean * t, y)
+
+	# 등 뒤로 길게 나부끼는 초록 망토 (가장 뒤)
+	var n: Vector2 = sh.call(Vector2(cx - 2, 15))
+	_poly(img, PackedVector2Array([n + Vector2(3, -1), n + Vector2(-5 - flutter * 0.6, 6), n + Vector2(-9 - flutter * 1.2, 20 - flutter * 0.8),
+			n + Vector2(-11 - flutter * 1.5, 31 - flutter * 1.3), n + Vector2(-5 - flutter * 1.1, 29 - flutter), n + Vector2(0, 33 - flutter * 0.9),
+			n + Vector2(4, 12)]), cloak_d)
+	_poly(img, PackedVector2Array([n + Vector2(2, 0), n + Vector2(-4 - flutter * 0.5, 7), n + Vector2(-7 - flutter, 20 - flutter * 0.7),
+			n + Vector2(-3 - flutter * 0.7, 25 - flutter * 0.7), n + Vector2(3, 11)]), cloak)
+	# 뒷팔
+	_line(img, sh.call(Vector2(cx - 3, 22)), hand + Vector2(-1, 1) if two else sh.call(Vector2(cx - 6, 32)), 2.8, coat_d)
+	# 다리 + 부츠
+	var back_foot := Vector2(cx - 3 - stride, ground - 2)
+	var front_foot := Vector2(cx + 3 + stride, ground - 2)
+	if tuck:
+		back_foot = Vector2(cx - 6, hip_y + 8)
+		front_foot = Vector2(cx + 5, hip_y + 10)
+	_line(img, Vector2(cx - 1, hip_y), back_foot, 3.0, trouser.darkened(0.3))
+	_line(img, Vector2(cx + 2, hip_y), front_foot, 3.0, trouser)
+	_rect(img, int(back_foot.x) - 2, int(back_foot.y), 6, 3, boot.darkened(0.25))
+	_rect(img, int(front_foot.x) - 1, int(front_foot.y), 6, 3, boot)
+	_rect(img, int(front_foot.x) - 1, int(front_foot.y) - 2, 4, 2, gold.darkened(0.15))
+	# 몸통: 금실 장식의 흰 상의 + 허리띠 + 짧은 자락
+	var body := PackedVector2Array()
+	for v in [Vector2(cx - 6, 20), Vector2(cx + 6, 20), Vector2(cx + 6, 28), Vector2(cx + 5, 36), Vector2(cx + 7, 41), Vector2(cx - 7, 41), Vector2(cx - 5, 36), Vector2(cx - 7, 28)]:
+		body.append(sh.call(v))
+	_poly(img, body, coat)
+	_line(img, sh.call(Vector2(cx + 1, 21)), sh.call(Vector2(cx + 1, 40)), 1.2, gold)
+	_poly(img, PackedVector2Array([sh.call(Vector2(cx - 6, 33)), sh.call(Vector2(cx + 6, 33)),
+			sh.call(Vector2(cx + 6, 35)), sh.call(Vector2(cx - 6, 35))]), hood_d)
+	_rect(img, int(sh.call(Vector2(cx, 33)).x), int(sh.call(Vector2(cx, 33)).y), 3, 2, gold)
+	# 어깨 망토 깃 + 금 브로치
+	var s0: Vector2 = sh.call(Vector2(cx - 7, 19))
+	var s1: Vector2 = sh.call(Vector2(cx + 6, 19))
+	_poly(img, PackedVector2Array([s0, s1, s1 + Vector2(1, 3), s0 + Vector2(-1, 6)]), cloak)
+	_ellipse(img, s1.x - 2, s1.y + 1, 1.6, 1.6, gold)
+	# 머리: 얼굴 → 붉은 앞머리 → 밝은 초록 두건
+	var hc: Vector2 = sh.call(Vector2(cx + 1, 12))
+	if droop:
+		hc += Vector2(3, 4)
+	_ellipse(img, hc.x + 0.5, hc.y + 0.5, 5.5, 6.0, skin)
+	_rect(img, int(hc.x + 2), int(hc.y), 2, 2, eye)
+	_line(img, hc + Vector2(1, -1), hc + Vector2(5, -1), 1.0, hair_d)
+	_rect(img, int(hc.x + 2), int(hc.y + 4), 2, 1, _c(198, 140, 120))
+	_poly(img, PackedVector2Array([hc + Vector2(-5, -5), hc + Vector2(6, -5), hc + Vector2(6, -2), hc + Vector2(3, -3), hc + Vector2(2, 0),
+			hc + Vector2(0, -2), hc + Vector2(-2, 3), hc + Vector2(-5, 4)]), hair)
+	_line(img, hc + Vector2(-3, -3), hc + Vector2(-3, 3), 1.2, hair_d)
+	_poly(img, PackedVector2Array([hc + Vector2(-7, 5), hc + Vector2(-8, -3), hc + Vector2(-4, -8), hc + Vector2(3, -9), hc + Vector2(7, -5),
+			hc + Vector2(5, -5), hc + Vector2(-3, -4), hc + Vector2(-5, 6)]), hood)
+	_poly(img, PackedVector2Array([hc + Vector2(-7, 0), hc + Vector2(-12 - flutter * 0.5, 4 - flutter * 0.2), hc + Vector2(-6, 7)]), hood_d)
+	_line(img, hc + Vector2(-3, -8), hc + Vector2(3, -8), 1.0, hood.lightened(0.35))
+	# 앞팔 + 금 소맷부리 + 흰 장갑
+	var fs: Vector2 = sh.call(Vector2(cx + 3, 22))
+	_line(img, fs, hand, 3.0, coat)
+	_line(img, fs.lerp(hand, 0.72), fs.lerp(hand, 0.86), 3.4, gold)
+	_ellipse(img, hand.x, hand.y, 1.9, 1.9, _c(250, 246, 234))
+	_shade_edges(img, 0.14, 0.22, [gold, eye, hair, hair_d, skin])
+	_outline(img, _c(14, 20, 16))
+	return img
+
+
+## 양손 장검 — 회전축 = 손잡이 가운데 (6, 4.5). 칼끝까지 ≈ 40 아트px = 80 로컬px (prince.gd의 SWORD_REACH).
+func _prince_sword() -> Image:
+	var img := _new(48, 9)
+	var cy := 4
+	_ellipse(img, 1.5, 4.5, 1.5, 1.6, _c(232, 192, 86))           # 금 폼멜
+	_rect(img, 2, 3, 8, 3, _c(40, 110, 64))                        # 손잡이 (초록 가죽 감개)
+	for x in [3, 5, 7, 9]:
+		_put(img, x, 3, _c(92, 214, 96))
+	_rect(img, 10, 0, 2, 9, _c(232, 192, 86))                      # 금 가드
+	_put(img, 10, 4, _c(92, 214, 96))
+	for x in range(12, 46):
+		var hw := 1 if x < 43 else 0
+		for y in range(cy - hw, cy + hw + 1):
+			var c := _c(176, 200, 188)
+			if hw > 0 and y == cy - hw:
+				c = _c(236, 246, 240)
+			elif hw > 0 and y == cy + hw:
+				c = _c(110, 136, 124)
+			_put(img, x, y, c)
+	_put(img, 46, cy, _c(246, 252, 248))
+	_outline(img, _c(14, 20, 16))
 	return img

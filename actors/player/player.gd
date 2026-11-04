@@ -23,6 +23,10 @@ extends CharacterBody2D
 ##     카메라 화면 안의 모든 적에게 피해를 주고 궁극기 게이지를 크게 채운다.
 ##   - 누른 순간 ParryBox 안에 반짝이는 적의 공격 판정이 있으면 성공 → 적 경직, 공격 취소.
 ##   - 아니면 헛반격: 짧은 경직 + 재사용 대기(연타로는 맞출 수 없다). 헛반격엔 무적이 없다.
+##   - 방어 입력(왕자의 천지분쇄 등, 그룹 guard_threat): 창이 열려 있으면 반격 키가 그 공격의 피해만 막는다.
+##     일반 반격과 분리된 경로라 궁극기·연쇄·패기·적 경직·무적이 전혀 붙지 않고, 다음 입력도 막지 않는다 (_try_guard).
+##
+## 이벤트 잠금(Action.LOCKED): 왕자의 힘겨루기처럼 이벤트가 입력을 가져간 동안에는 어떤 입력도 행동으로 나가지 않는다.
 ##
 ## 피격 반응은 Combat/Health, Combat/Hurtbox 시그널로만 받는다 (take_damage를 직접 갖지 않는다).
 ## 손맛(hit-stop/shake/VFX/SFX)은 명중·반격 순간에 적용한다.
@@ -32,9 +36,12 @@ signal ultimate_changed(charge: float, max_charge: float)
 signal ultimate_ready_changed(is_ready: bool)
 signal died
 
-enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SLASH, SPIN_RISE, DIVE, ULTIMATE, HURT, DEAD }
+enum Action { NONE, ATTACK, PARRY, DASH, SKILL, DASH_SLASH, LIGHTNING, RISING_SLASH, SPIN_RISE, DIVE, ULTIMATE, HURT, DEAD, LOCKED }
 enum SpinPhase { WINDUP, RISE, END }
 enum DivePhase { HOP, HANG, FALL, LAND }
+
+const GUARD_PRESS_LOCK := 0.02        # 방어로 쓴 입력이 같은 물리 프레임의 반격 분기에서 헛반격이 되지 않게 잠깐 막는다
+const EVENT_END_PARRY_LOCK := 0.25
 
 # ─────────────────────────── 이동 튜닝 ───────────────────────────
 @export_group("Movement")
@@ -85,6 +92,8 @@ enum DivePhase { HOP, HANG, FALL, LAND }
 @export var counter_path_damage: int = 20        # 원거리 반격 X자가 되돌아가는 길에 있던 적 피해 (임시 2N)
 @export var counter_path_width: float = 40.0     # 그 길의 판정 폭 (선에서 이 거리 안)
 @export var deflect_success_time: float = 0.16   # 바늘 튕겨내기 후 자세 유지(무적) — 반격 성공보다 짧다
+@export var guard_pose_time: float = 0.24        # 방어 입력의 검을 아래로 세운 자세 (겉모습만, 입력을 막지 않는다)
+@export var guard_hop_speed: float = 240.0       # 충격을 막을 때 살짝 떠오르는 속도
 
 @export_group("Skill Slots")
 ## 입력 슬롯마다 장착한 스킬 이름. 스킬 키(E)를 누를 때 아래(S/↓) > 위(W/↑) > 기본 순으로 슬롯을 고른다.
@@ -226,6 +235,8 @@ var _chain_t: float = 0.0              # 연쇄 반격 창 남은 시간 (반격
 var _chain_armed: bool = false         # 창 안에서 반격 키를 눌러 예약됨 → 받아칠 게 생기면 자동 반격
 var _chain_skip_press: bool = false    # 창을 연 바로 그 입력으로 예약되지 않게 한 화면 프레임 건너뛴다
 var _chain_count: int = 0              # 이어진 연쇄 수 (반격음이 점점 높아진다)
+var _guard_pose_t: float = 0.0         # 방어 자세 남은 시간
+var _guard_hop: bool = false           # 충격을 막으며 살짝 뜨는 중 (점프 키를 안 눌러도 상승이 잘리지 않는다)
 var _counter_buffered: bool = false    # 슬로모션 중 화면 프레임에서 받은 방향 무관 반격 입력 (다음 물리 프레임에 쓴다)
 var _skill_fired: bool = false
 var _dash_slash_queued: bool = false   # 대시 중 E 입력 → 대시가 끝나면 대시 참격
@@ -289,6 +300,9 @@ func _process(delta: float) -> void:
 	if _iframe_t > 0.0:
 		_iframe_t -= delta
 		visual.modulate.a = 1.0 if _iframe_t <= 0.0 or int(_iframe_t * 16.0) % 2 == 0 else 0.3
+	# 방어 입력도 hit-stop(물리 정지) 중에 놓치지 않는다.
+	if Engine.time_scale < 1.0 and Input.is_action_just_pressed("player_parry"):
+		_try_guard()
 	# 보스의 역반격 창처럼 세상이 느려진 동안엔 물리 프레임이 드물다 — 그 사이의 반격 입력을 모아 둔다.
 	if Engine.time_scale < 1.0 and Input.is_action_just_pressed("player_parry") and _can_take_counter_press() 			and (not _open_counter_threats().is_empty() or not _deflectable_needles().is_empty()):
 		_counter_buffered = true
@@ -308,6 +322,8 @@ func _physics_process(delta: float) -> void:
 		_counter_buffered = false
 		if _can_take_counter_press() and (not _open_counter_threats().is_empty() or not _deflectable_needles().is_empty()):
 			_start_parry()
+	if Input.is_action_just_pressed("player_parry"):
+		_try_guard()
 
 	match action:
 		Action.DASH:
@@ -334,6 +350,8 @@ func _physics_process(delta: float) -> void:
 			_process_hurt(delta)
 		Action.DEAD:
 			_apply_gravity(delta)
+		Action.LOCKED:
+			velocity = Vector2.ZERO
 		_:
 			_process_free(delta)
 
@@ -356,13 +374,19 @@ func _tick_timers(delta: float) -> void:
 	_dash_cd = maxf(_dash_cd - delta, 0.0)
 	_parry_cd = maxf(_parry_cd - delta, 0.0)
 	_dash_slash_window = maxf(_dash_slash_window - delta, 0.0)
+	if _guard_pose_t > 0.0:
+		_guard_pose_t -= delta
+		if _guard_pose_t <= 0.0 and visual.anim == &"guard_down":
+			visual.play(&"locomotion")
 	if _dash_iframe_t > 0.0:
 		_dash_iframe_t -= delta
 		# 반격/궁극기/사망처럼 무적을 스스로 관리하는 동작 중이면 건드리지 않는다
-		if _dash_iframe_t <= 0.0 and action not in [Action.DASH, Action.PARRY, Action.SPIN_RISE, Action.ULTIMATE, Action.DEAD]:
+		if _dash_iframe_t <= 0.0 and action not in [Action.DASH, Action.PARRY, Action.SPIN_RISE, Action.ULTIMATE, Action.DEAD, Action.LOCKED]:
 			hurtbox.invincible = false
 	if _rising_up and (velocity.y >= 0.0 or is_on_floor()):
 		_rising_up = false
+	if _guard_hop and velocity.y >= 0.0:
+		_guard_hop = false
 	if _combo_timer > 0.0:
 		_combo_timer = maxf(_combo_timer - delta, 0.0)
 		if _combo_timer == 0.0:
@@ -491,7 +515,7 @@ func _apply_gravity(delta: float) -> void:
 		g *= fall_gravity_mult
 	# 점프 버튼을 떼면 상승을 잘라 가변 높이를 만든다.
 	# (승천 참격으로 튀어 오를 때는 자르지 않는다 — 기본으로 끝까지 높이 오른다)
-	if velocity.y < 0.0 and not _rising_up and not Input.is_action_pressed("player_jump"):
+	if velocity.y < 0.0 and not _rising_up and not _guard_hop and not Input.is_action_pressed("player_jump"):
 		velocity.y *= jump_cut_mult
 	velocity.y = minf(velocity.y + g * delta, max_fall_speed)
 
@@ -1398,7 +1422,7 @@ func _tick_chain(delta: float) -> void:
 
 ## 지금 반격 키를 받아 줄 수 있는 상태인가 (피격·궁극기·이미 반격 중·죽음이면 아니다).
 func _can_take_counter_press() -> bool:
-	return _parry_cd <= 0.0 and action not in [Action.PARRY, Action.HURT, Action.ULTIMATE, Action.DEAD]
+	return _parry_cd <= 0.0 and action not in [Action.PARRY, Action.HURT, Action.ULTIMATE, Action.DEAD, Action.LOCKED]
 
 
 func _has_counter_target() -> bool:
@@ -1438,6 +1462,96 @@ func _trigger_parry_success(targets: Array[Enemy]) -> void:
 		var contact := (global_position + enemy.global_position) * 0.5 + Vector2(0.0, -18.0)
 		_spawn_parry_spark(contact, 1.4)
 		enemy.on_parried(global_position)
+
+
+# ─────────────────────────── 방어 입력 (천지분쇄 등) ───────────────────────────
+## 방어 창이 열린 적이 있으면 이 입력을 방어로 쓴다. 일반 반격과 달리 _open_chain / _add_ultimate / _check_haki /
+## _trigger_parry_success를 거치지 않는다 — 효과는 그 공격의 피해가 막히는 것뿐이고, 판정은 적이 충격 순간에 한다.
+## 무적을 주지 않고 동작도 묶지 않으므로 다음 신호의 입력을 막지 않는다. 헛반격 재사용 대기(연타 금지)는 그대로 지킨다.
+func _try_guard() -> bool:
+	if _parry_cd > 0.0 or action == Action.DEAD or action == Action.LOCKED:
+		return false
+	var enemy := _open_guard_threat()
+	if enemy == null:
+		return false
+	_cancel_chain()
+	if action == Action.PARRY:
+		hurtbox.invincible = false
+	if action == Action.PARRY or action == Action.HURT:
+		action = Action.NONE               # 앞 회차 피격 경직도 다음 회차 방어를 막지 않는다
+	_parry_cd = GUARD_PRESS_LOCK
+	_guard_pose_t = guard_pose_time
+	visual.play(&"guard_down")
+	_squash = Vector2(0.88, 1.12)
+	_set_flash(Color(0.6, 1.0, 0.7), 0.9)
+	_sfx(sfx_parry, 0.03)
+	sfx_parry.pitch_scale *= 0.8
+	_spawn_spark(global_position + Vector2(0.0, 24.0), Color(0.7, 1.0, 0.75, 1.0), 8, 160.0, 90.0, 36.0)
+	enemy.on_guarded()
+	return true
+
+
+func _open_guard_threat() -> Enemy:
+	for n in get_tree().get_nodes_in_group("guard_threat"):
+		var enemy := n as Enemy
+		if enemy != null and enemy.is_guard_open():
+			return enemy
+	return null
+
+
+## 막아 낸 충격이 도착했다 — 검을 아래로 세워 지면 충격을 받으며 살짝 뜬다. 겉모습뿐이라 입력은 그대로 받는다.
+func on_guard_impact(strength: float) -> void:
+	if action == Action.DEAD or action == Action.LOCKED:
+		return
+	if is_on_floor():
+		velocity.y = -guard_hop_speed
+		_guard_hop = true
+	_guard_pose_t = guard_pose_time
+	if action == Action.NONE:
+		visual.play(&"guard_down")
+	_squash = Vector2(1.2, 0.84)
+	_set_flash(Color(0.85, 1.0, 0.9), 0.8)
+	_sfx(sfx_parry, 0.03)
+	_spawn_parry_spark(global_position + Vector2(0.0, 26.0), 0.7 + 0.5 * strength)
+
+
+# ─────────────────────────── 이벤트 잠금 (왕자의 힘겨루기 등) ───────────────────────────
+## 이벤트가 입력을 가져간다: 하던 동작을 끊고 제자리에 멈춰 맞지 않는다. end_event_lock()으로 돌려준다.
+func begin_event_lock() -> void:
+	if action == Action.DEAD:
+		return
+	_stop_abilities()
+	action = Action.LOCKED
+	velocity = Vector2.ZERO
+	hurtbox.invincible = true
+	_dash_iframe_t = 0.0
+	visual.play(&"clash")
+
+
+func end_event_lock() -> void:
+	if action != Action.LOCKED:
+		return
+	action = Action.NONE
+	hurtbox.invincible = false
+	_parry_cd = EVENT_END_PARRY_LOCK      # 마지막 연타가 곧바로 헛반격으로 나가지 않게 한다
+	visual.play(&"locomotion")
+
+
+## 이벤트를 끝내는 마무리 일격: 잠금을 풀고 대상 몸에 X자를 새긴다. 일반 반격 보상은 없다.
+func event_final_strike(enemy: Enemy, dmg: int) -> void:
+	end_event_lock()
+	visual.play(&"parry_success")
+	_guard_pose_t = 0.0
+	GameFeel.hit_stop(0.2, 0.05)
+	GameFeel.flash(Color(0.3, 0.05, 0.45), 0.25, 0.25)
+	GameFeel.shake(0.7)
+	_sfx(sfx_parry, 0.0)
+	_set_flash(Color(0.75, 0.45, 1.0), 1.0)
+	_spawn_parry_spark(global_position + Vector2(facing * 26.0, -16.0), 1.4)
+	if counter_slash_scene != null:
+		_spawn_counter_slash(enemy, dmg)
+	else:
+		enemy.hurtbox.receive_hit(dmg, self, Vector2.ZERO)
 
 
 # ─────────────────────────── 궁극기 ───────────────────────────
@@ -1577,6 +1691,13 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 		velocity = Vector2(dir * 240.0, -160.0)
 	action = Action.HURT
 	_action_time = 0.0
+	_stop_abilities()
+	_set_flash(Color(1.0, 0.35, 0.35), 0.9)
+	visual.play(&"hurt")
+
+
+## 진행 중인 기술의 판정·예약을 모두 끊는다 (피격·사망·이벤트 잠금).
+func _stop_abilities() -> void:
 	attack_hitbox.monitoring = false
 	dash_slash.set_active(false)
 	rising_slash.cancel()
@@ -1586,8 +1707,6 @@ func _on_hit_received(damage: int, source: Node, knockback: Vector2) -> void:
 	_cancel_chain()
 	_dash_slash_queued = false
 	trail.visible = false
-	_set_flash(Color(1.0, 0.35, 0.35), 0.9)
-	visual.play(&"hurt")
 
 
 ## 강하 중 피격: 피해만 받고 강하는 그대로 이어간다 (밀려나지도 않는다).
@@ -1631,16 +1750,8 @@ func _process_hurt(delta: float) -> void:
 
 func _on_died() -> void:
 	action = Action.DEAD
-	attack_hitbox.monitoring = false
-	dash_slash.set_active(false)
-	rising_slash.cancel()
-	spin_rise.cancel()
-	dive.set_body_active(self, false)
-	_rising_up = false
-	_cancel_chain()
-	_dash_slash_queued = false
+	_stop_abilities()
 	hurtbox.invincible = true
-	trail.visible = false
 	velocity = Vector2(-facing * 200.0, -260.0)
 	GameFeel.hit_stop(0.2)
 	GameFeel.shake(0.8)

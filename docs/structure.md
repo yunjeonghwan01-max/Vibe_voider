@@ -269,7 +269,7 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
 - 전투 손맛(hit-stop/shake/슬래시·스파크·잔상)은 명중·패링·사망 순간에 적용한다. VFX는 외부 이미지 없이 `_draw`로 그린다 (`combat/effects/slash|spark|afterimage/`).
 - 입력 액션(추가분): `player_jump`(Space만) `player_attack` `player_parry` `player_dash` `player_skill`(E) `player_ultimate` + `player_move_left/right`에 A/D 추가, `player_move_up`(↑/W)·`player_move_down`(↓/S)은 스킬 슬롯을 고르는 방향 수식키. W/↑는 점프가 아니다. 점프는 공중에서 한 번 더 할 수 있다(더블 점프, `air_jumps` 1회, 착지 시 충전, 발밑 보랏빛 고리).
 - `Toolkit` (`toolkit.gd`): `tool_toggle_hud` / `tool_restart` / `tool_pause` (`tool_cheat`를 누르고 있는 동안은 무시 — 숫자 보조 키 충돌 방지).
-- **개발 치트** (`Toolkit/Cheats`, `toolkit/cheats.gd`, 목록은 `docs/cheats.txt`): `tool_cheat`(백틱 키)를 누른 채 숫자 키(물리 키 KEY_1~9로 읽고 입력을 소비). 1 = `Player.force_chain_burst()` (3단 연쇄 반격 → 패기 방출), 2 = `Arena.summon_boss_now()` (그룹 `arena`로 찾는다, 적 추방 후 지진 없이 곧장 낙하), 3 = `Arena.summon_boss_now(rally_dummy_scene)` (`toolkit/rally_dummy/`: 반격 자세만 쓰고 쓰러지지 않는 가짜 보스, 수치는 `Tuning.apply(self, <원본 씬>)`으로 `knight_tuning.cfg`를 빌린다 — 폴더와 치트 항목을 지워도 본편은 그대로). 4~7 = Phase1 분대 인원 순환(그룹 `phase1`), 8 = `Main.cycle_level()` (그룹 `main`, Phase1 ↔ Arena). 발동하면 화면 위에 이름을 잠깐 띄운다.
+- **개발 치트** (`Toolkit/Cheats`, `toolkit/cheats.gd`, 목록은 `docs/cheats.txt`): `tool_cheat`(백틱 키)를 누른 채 숫자 키(물리 키 KEY_1~9로 읽고 입력을 소비). 1 = `Player.force_chain_burst()` (3단 연쇄 반격 → 패기 방출), 2 = `Arena.summon_boss_now()` (그룹 `arena`로 찾는다, 적 추방 후 지진 없이 곧장 낙하), 3 = `Arena.summon_boss_now(rally_dummy_scene)` (`toolkit/rally_dummy/`: 반격 자세만 쓰고 쓰러지지 않는 가짜 보스, 수치는 `Tuning.apply(self, <원본 씬>)`으로 `knight_tuning.cfg`를 빌린다 — 폴더와 치트 항목을 지워도 본편은 그대로). 4~7 = Phase1 분대 인원 순환(그룹 `phase1`), 8 = `Main.cycle_level()` (그룹 `main`, Phase1 ↔ Arena), 9 = `Phase1.prince_debug_next()` (왕자전 시작 → 패턴 4 → 패턴 5). 발동하면 화면 위에 이름을 잠깐 띄운다.
 - **카유공(카운터 유도 공격)** — 감시자(`actors/enemies/watcher/`, 공중 원거리 중간 보스급 적 — 금장 갑각·가시 왕관·후광·칼날깃 날개, 잡몹보다 크다):
   - 평소: 플레이어 위쪽 옆(`hover_distance`/`hover_height`)을 떠다니며 바늘(`watcher_needle.gd/.tscn`, 닿기 직전 짧게 빛날 때만 튕겨내기로 지울 수 있다)을 쏜다. 날아다니므로 `_apply_gravity`를 감속으로 오버라이드하고 몸은 지형과 충돌하지 않는다(mask 0, `fly_bounds` 안에 머문다 — 레벨이 스폰 때 지정).
   - CHARGE 2초(금빛 입자가 점점 빠르게 몸 중앙으로, 공용 `combat/effects/counter_tell/` (`CounterTell`)) → WINDOW 0.4초(거대한 + 섬광 + 조준선) → 못 받아치면 히트스캔 광선(`watcher_beam.gd` 겉모습). CHARGE/WINDOW는 슈퍼아머.
@@ -321,12 +321,12 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
 
 ```text
 Phase1 (Node2D)                               levels/phase1/phase1.tscn (phase1.gd, phase1_tuning.cfg = 분대 인원)
-├── World          SkyLayer(Far, MoonGlow — 시차) / Trees / LightShafts / Fireflies / Ground / LeftWall·RightWall (숲 벽) / Foreground(잎·고사리 — 시차)
+├── World          SkyLayer(Far, MoonGlow — 시차) / Trees / LightShafts / Fireflies / Ground / LeftWall·RightWall (숲 벽) / BossGateLeft·Right (왕자전에만 닫힘) / Foreground(잎·고사리 — 시차)
 ├── Actors └ Player
-├── Projectiles (group "projectiles")   Effects (group "fx")   GameCamera (room_limits ±1140)   Vignette   Hud   Audio/Music
+├── Projectiles (group "projectiles")   Effects (group "fx")   GameCamera (room_limits ±1140)   Vignette   Hud   Audio/Music·BossMusic
 ```
 
-- 숲 그림과 제3부대 그림은 `toolkit/asset_gen/sprite_gen.gd`가 코드로 그린 placeholder다 (`-- infantry forest assassin crossbowman giant`로 일부만 다시 그린다).
+- 숲 그림과 제3부대 그림은 `toolkit/asset_gen/sprite_gen.gd`가 코드로 그린 placeholder다 (`-- infantry forest assassin crossbowman giant prince`로 일부만 다시 그린다).
 - 적은 레벨 스크립트가 분대 단위로 스폰하고 `enemy` 그룹에 넣는다 (`field_mob`은 각 적 씬에 들어 있다). 분대를 전멸시키면 `wave_delay` 뒤 새 분대. 치트 4~7이 종류별 인원을 바꾼다 (`docs/cheats.txt`).
 - 제3부대 적 (`actors/enemies/<name>/`, 각자 `<name>_tuning.cfg`) — 모두 `Enemy` 직속 하위 클래스, 공통 Hitbox→Hurtbox→Health 경로:
   - `infantry` 보병: 걸어와 느리고 넉넉한 단일 MCI 내려베기.
@@ -334,6 +334,19 @@ Phase1 (Node2D)                               levels/phase1/phase1.tscn (phase1.
   - `crossbowman` 석궁병: 같은 수평선 + 지형에 막히지 않은 사선에서만 경고 BAR 뒤 볼트 발사. `CrossbowBolt`는 `WatcherNeedle`을 상속해 기존 PRCI(`deflectable`)를 그대로 쓴다. 붙으면 쿨다운 후퇴 순보.
   - `giant` 거병: 같은 바닥일 때만 돌진(이동만). 1차 MCI를 반격당하면 기절 대신 비틀 → 반동 2차 MCI(새 FLASH, 연쇄 예약 창 밖). 2차까지 받아치면 긴 기절. 분기는 `Giant.on_parried()`에만 있다.
 - 가독성 조정: 보병·암살자·거병은 다른 제3부대가 막 공격을 치켜들었으면 `crowd_attack_gap`만큼 기다린다 (패턴이 아니라 반짝임 겹침 방지).
+
+**보스 구역과 제3왕자** (`actors/enemies/prince/`, `Prince`, `prince_tuning.cfg`, 이름 미정이라 화면에는 `THE THIRD PRINCE`):
+
+- 진입: 분대를 `squads_for_boss`(3)번 쓰러뜨리거나 치트 9. `Phase1`이 남은 적을 추방하고 `World/BossGateLeft·Right`(숲 벽과 같은 그림, 평소엔 숨김·충돌 꺼짐)를 닫아 구역 ±680을 만들고 `room_limits`를 좁힌 뒤 왕자를 부른다. `app/main.tscn`은 그대로다.
+- 끝: 왕자가 쓰러지면 벽이 열리고 평소 분대가 돌아온다. 플레이어가 쓰러지면(`Player.died`) 부활 뒤 왕자전을 1페이즈부터 다시 시작한다.
+- 진행: 1페이즈(패턴 1~3, 주머니 근접 3 : 돌진 1 : 검격 1) → `phase2_hp` → 패턴 4 → 2페이즈(`phase2_speed`, `phase2_flash_scale`) → `final_hp` → 패턴 5. `PrinceHealth`(공용 `HealthComponent` 상속, `floor_hp`)가 경계 아래로 내려가지 않게 막아 큰 피해로 패턴 4·5를 건너뛸 수 없다. 패턴 4·5 동안은 `hurtbox.invincible`.
+- 패턴 1 근접 검격: 순보 → RAISE → FLASH(MCI) → STRIKE. 후속은 `Prince.on_parried()`에서만 굴린다(`followup_chance_2/3`, `debug_followups`). 후속 있음 = RECOIL(초록, 버티는 자세) → RERAISE → 새 FLASH, 합이 연쇄 예약 창보다 훨씬 길어 CC가 아니다. 후속 없음 = 곧바로 BROKEN 자세 + 청록 경직(`melee_stun`). Knight의 CCI와 무관하다.
+- 패턴 2 횡단 돌진: 플레이어에게서 먼 맵 끝으로 순간이동 → 웅크림 → 가속 돌진(`RushHitbox`, layer 0) + `PrinceAura`. FLASH는 왕자가 멀리 있을 때만 켜지고(`rush_flash_far~near`, `rush_flash_lead`) `is_counter_open()`과 같은 값이라 방향 무관 반격 → 중단 + 기절(`on_countered`). 아우라는 지나간 자리가 `aura_life`만큼 뜨겁고, 겹침을 매 프레임 확인해 대시 무적이 끝난 뒤에 맞힌다(무적 관통 아님). 본체에 맞았거나 반격당했으면 `spent`로 더 맞히지 않는다.
+- 패턴 3 원거리 검격: `PrinceWave`는 `WatcherNeedle`을 상속해 기존 PRCI 경로를 그대로 쓰고 속도만 가속한다.
+- 패턴 4 천지분쇄 일격: 공중 충전 → 세 번의 전역 충격. 각 회차 `is_guard_open()` 동안 반격 키 → `Player._try_guard()` → `on_guarded()`. **일반 반격과 분리된 경로**라 `_open_chain` / `_add_ultimate` / `_check_haki` / 적 경직 / 무적이 붙지 않고, 효과는 그 회차 피해가 막히는 것뿐이다(`Player.on_guard_impact()`는 겉모습). 못 막은 회차는 `quake_pierce`로 앞 회차 피격 무적을 뚫고 그 회차 피해만 준다. 헛반격 재사용 대기는 지킨다(연타 금지). 신호·지면 연출은 `PrinceQuake`: 글자·UI 없이 이펙트만 쓴다. 입력 순간은 조여드는 고리 + 몸으로 모여드는 빛의 창, 입력이 들어가면 흰빛 막, 충격 순간 성공은 충격파·파편·지면을 가르는 빛, 실패는 몸을 꿰뚫는 붉은 번개.
+- 패턴 5 마지막 일격: 4초 충전 → 플레이어 머리 위 순간이동 → 느린 낙하. 낙하 중 누르거나 끝까지 기다리면 맞부딪힘이 성립한다(같은 방어 경로, 보상 없음). `Player.begin_event_lock()`(`Action.LOCKED`)로 입력을 가져가고 `PrinceClash`만 반격 키를 읽는다. 게이지가 차면 `Player.event_final_strike()`로 승리, 비면 왕자가 치명타(`receive_hit`) → 패배 → 재시작.
+- 보조 경로(공용 추가분): `Enemy.is_guard_open()` / `on_guarded()`와 그룹 `guard_threat`, `Player.Action.LOCKED`, `Hud.show_boss(health, title)`.
+- 아트: `assets/temporary/characters/prince/` (`-- prince`로 다시 그린다), 프레임별 손 위치는 `_gen_prince`와 `Prince.HAND`가 같아야 한다.
 
 ## 6. 엔진 제약에 따른 예외
 

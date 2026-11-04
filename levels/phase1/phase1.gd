@@ -8,6 +8,8 @@ extends Node2D
 ## 테스트: 시작 인원은 phase1_tuning.cfg, 치트 4(` + 4)는 보병 1 → 2 → 4 → 6 → 0명, 치트 5(` + 5)는 암살자 0 → 1 → 2 → 3명,
 ## 치트 6(` + 6)은 석궁병, 치트 7(` + 7)은 거병 0 → 1 → 2 → 3명
 ## — 누르면 지금 분대를 돌려보내고 새 인원으로 즉시 다시 부른다.
+## 보스 구역: 분대를 squads_for_boss번 쓰러뜨리면(또는 치트 9) 숲 한가운데가 양쪽 나무 벽으로 막히고 제3왕자가 나타난다.
+## 플레이어가 쓰러지면 부활 뒤 왕자전을 처음부터 다시 시작한다. 이기면 벽이 열리고 평소 분대가 돌아온다.
 ## 숲 배경은 코드로 그린 placeholder (toolkit/asset_gen/sprite_gen.gd의 _gen_forest) — 완성 아트가 아니다.
 
 const SQUAD_PRESETS: Array[int] = [1, 2, 4, 6, 0]
@@ -19,6 +21,7 @@ const GIANT_PRESETS: Array[int] = [0, 1, 2, 3]
 @export var assassin_scene: PackedScene
 @export var crossbowman_scene: PackedScene
 @export var giant_scene: PackedScene
+@export var prince_scene: PackedScene
 @export_range(0, 6) var squad_size: int = 4
 @export_range(0, 3) var assassin_count: int = 1
 @export var assassin_spawn_distance: float = 700.0   # 암살자는 멀리서 나타나 순보로 다가온다
@@ -31,6 +34,16 @@ const GIANT_PRESETS: Array[int] = [0, 1, 2, 3]
 @export var spawn_row_gap: float = 90.0          # 같은 쪽에 서는 보병끼리의 등장 간격
 @export var room_x: Vector2 = Vector2(-1100.0, 1100.0)   # 숲 벽 안쪽 면
 @export var spawn_y: float = -40.0
+@export_group("Boss")
+@export var squads_for_boss: int = 3             # 이만큼 분대를 쓰러뜨리면 왕자전 (치트 9로 바로 시작할 수도 있다)
+@export var boss_room_x: Vector2 = Vector2(-680.0, 680.0)   # 보스 구역 벽 안쪽 면
+@export var boss_camera_limits: Rect2 = Rect2(-730, -800, 1460, 950)
+@export var boss_player_x: float = -420.0
+@export var boss_prince_x: float = 420.0
+@export var boss_intro_delay: float = 0.9        # 구역이 닫힌 뒤 왕자가 나타나기까지
+@export var boss_retry_delay: float = 1.7        # 플레이어가 쓰러진 뒤 다시 시작까지 (부활 1.4초보다 길게)
+@export var boss_exit_delay: float = 3.5         # 왕자를 쓰러뜨린 뒤 벽이 열리기까지
+@export_group("")
 @export var sky_parallax: float = 0.35           # 1보다 작을수록 멀리 있는 것처럼 느리게 움직인다
 @export var foreground_parallax: float = 0.18    # 전경은 카메라보다 빠르게 지나간다
 
@@ -43,9 +56,16 @@ const GIANT_PRESETS: Array[int] = [0, 1, 2, 3]
 @onready var sky_layer: Node2D = $World/SkyLayer
 @onready var foreground: Node2D = $World/Foreground
 @onready var music: AudioStreamPlayer = $Audio/Music
+@onready var boss_music: AudioStreamPlayer = $Audio/BossMusic
+@onready var boss_gates: Array[StaticBody2D] = [$World/BossGateLeft as StaticBody2D, $World/BossGateRight as StaticBody2D]
 
 var _alive: int = 0
 var _wave_id: int = 0   # 치트로 분대를 바꾼 뒤 예전 분대의 "전멸" 예약이 새 분대를 또 부르지 않게
+var _squads_cleared: int = 0
+var _boss_active: bool = false
+var _prince: Prince = null
+var _fight_counter: int = 0   # 재시작·승리 뒤 예전 왕자전의 대기 흐름이 이어지지 않게
+var _open_limits: Rect2
 
 
 func _enter_tree() -> void:
@@ -63,6 +83,10 @@ func _ready() -> void:
 	hud.bind(player)
 	hud.set_tally(0, 0)               # 감시자 처치 수는 arena 전용 — 숨긴다
 	music.finished.connect(music.play)
+	boss_music.finished.connect(boss_music.play)
+	player.died.connect(_on_player_died)
+	_open_limits = camera.room_limits
+	_set_gates(false)
 	_spawn_squad()
 
 
@@ -101,6 +125,8 @@ func cycle_giants() -> int:
 
 
 func _respawn_now() -> void:
+	if _boss_active:
+		return
 	for n in get_tree().get_nodes_in_group("enemy"):
 		var e := n as Enemy
 		if e != null:
@@ -164,6 +190,112 @@ func _on_enemy_defeated(_e: Enemy, wave: int) -> void:
 	_alive -= 1
 	if _alive > 0:
 		return
+	_squads_cleared += 1
 	await get_tree().create_timer(wave_delay, false).timeout
-	if is_inside_tree() and wave == _wave_id:
+	if not is_inside_tree() or wave != _wave_id:
+		return
+	if _squads_cleared >= squads_for_boss:
+		_enter_boss_zone()
+	else:
 		_spawn_squad()
+
+
+# ─────────────────────────── 왕자 보스 구역 ───────────────────────────
+## 치트/테스트: 왕자전을 바로 시작하고, 이미 싸우는 중이면 체력을 다음 경계까지 내려 패턴 4 → 패턴 5로 넘어간다.
+## 화면에 띄울 결과 이름을 돌려준다 ("" = 지금은 쓸 수 없다).
+func prince_debug_next() -> String:
+	if not _boss_active:
+		_enter_boss_zone()
+		return "Fight"
+	if is_instance_valid(_prince):
+		return _prince.debug_next_stage()
+	return ""
+
+
+func _enter_boss_zone() -> void:
+	_boss_active = true
+	_wave_id += 1                         # 남아 있던 "전멸" 예약이 분대를 부르지 않게
+	_alive = 0
+	_clear_field()
+	music.stop()
+	_set_gates(true)
+	camera.room_limits = boss_camera_limits
+	_place_fighters_and_summon()
+
+
+func _clear_field() -> void:
+	for n in get_tree().get_nodes_in_group("enemy"):
+		var e := n as Enemy
+		if e != null:
+			e.banish()
+	for c in projectiles.get_children():
+		c.queue_free()
+
+
+func _place_fighters_and_summon() -> void:
+	GameFeel.flash(Color(0.02, 0.05, 0.03), 1.0, 0.8)     # 어두워진 사이에 자리를 옮긴다
+	player.global_position = Vector2(boss_player_x, player.global_position.y if player.is_on_floor() else spawn_y)
+	player.velocity = Vector2.ZERO
+	camera.global_position = player.global_position
+	var fight := _fight_counter
+	await get_tree().create_timer(boss_intro_delay, false).timeout
+	if not is_inside_tree() or fight != _fight_counter or not _boss_active:
+		return
+	_spawn_prince()
+
+
+func _spawn_prince() -> void:
+	if prince_scene == null:
+		return
+	_prince = prince_scene.instantiate() as Prince
+	_prince.position = Vector2(boss_prince_x, -30.0)
+	_prince.room_x = boss_room_x
+	_prince.floor_y = 0.0
+	actors.add_child(_prince)
+	_prince.add_to_group("enemy")
+	_prince.defeated.connect(_on_prince_defeated)
+	hud.show_boss(_prince.health, "THE THIRD PRINCE")
+	camera.focus = _prince
+	if not boss_music.playing:
+		boss_music.play()
+
+
+func _on_player_died() -> void:
+	if not _boss_active:
+		return
+	_fight_counter += 1
+	var fight := _fight_counter
+	await get_tree().create_timer(boss_retry_delay, true).timeout
+	if not is_inside_tree() or fight != _fight_counter or not _boss_active:
+		return
+	camera.focus = null
+	if is_instance_valid(_prince):
+		_prince.banish()
+	_prince = null
+	_clear_field()
+	_place_fighters_and_summon()
+
+
+func _on_prince_defeated(_e: Enemy) -> void:
+	_fight_counter += 1
+	var fight := _fight_counter
+	_prince = null
+	_clear_field()                        # 날아오던 검격이 승리 뒤에 맞히지 않게
+	hud.hide_boss()
+	camera.focus = null
+	boss_music.stop()
+	await get_tree().create_timer(boss_exit_delay, false).timeout
+	if not is_inside_tree() or fight != _fight_counter:
+		return
+	_boss_active = false
+	_squads_cleared = 0
+	_set_gates(false)
+	camera.room_limits = _open_limits
+	music.play()
+	_spawn_squad()
+
+
+func _set_gates(closed: bool) -> void:
+	for gate in boss_gates:
+		gate.visible = closed
+		(gate.get_node("CollisionShape2D") as CollisionShape2D).set_deferred("disabled", not closed)

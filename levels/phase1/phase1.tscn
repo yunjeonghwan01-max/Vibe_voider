@@ -8,7 +8,9 @@
 [ext_resource type="PackedScene" uid="uid://7c46a5egmwaa" path="res://actors/enemies/crossbowman/crossbowman.tscn" id="5_crossbow"]
 [ext_resource type="PackedScene" uid="uid://2i4ms7pmj5mi" path="res://actors/enemies/giant/giant.tscn" id="5_giant"]
 [ext_resource type="PackedScene" uid="uid://c7nqgrb65tuyi" path="res://actors/enemies/infantry/infantry.tscn" id="5_infantry"]
+[ext_resource type="PackedScene" path="res://actors/enemies/prince/prince.tscn" id="5_prince"]
 [ext_resource type="AudioStream" uid="uid://bxcfly0xthxyk" path="res://assets/temporary/audio/music_loop.wav" id="a_music"]
+[ext_resource type="AudioStream" path="res://assets/temporary/audio/boss_music_loop.wav" id="a_boss_music"]
 [ext_resource type="Texture2D" uid="uid://dlw0ev4shwoir" path="res://assets/temporary/environment/forest_edge.png" id="t_edge"]
 [ext_resource type="Texture2D" uid="uid://cna7d5j1rfuel" path="res://assets/temporary/environment/forest_far.png" id="t_far"]
 [ext_resource type="Texture2D" uid="uid://c6w1sr44o08ir" path="res://assets/temporary/environment/forest_fern.png" id="t_fern"]
@@ -59,6 +61,7 @@ infantry_scene = ExtResource("5_infantry")
 assassin_scene = ExtResource("5_assassin")
 crossbowman_scene = ExtResource("5_crossbow")
 giant_scene = ExtResource("5_giant")
+prince_scene = ExtResource("5_prince")
 
 [node name="World" type="Node2D" parent="." unique_id=272644040]
 
@@ -163,6 +166,39 @@ flip_h = true
 [node name="CollisionShape2D" type="CollisionShape2D" parent="World/RightWall" unique_id=749950530]
 shape = SubResource("Rect_wall")
 
+[node name="BossGateLeft" type="StaticBody2D" parent="World"]
+visible = false
+position = Vector2(-780, -400)
+collision_mask = 0
+
+[node name="Visual" type="Sprite2D" parent="World/BossGateLeft"]
+z_index = 4
+position = Vector2(-140, -440)
+scale = Vector2(2, 2)
+texture = ExtResource("t_edge")
+centered = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/BossGateLeft"]
+disabled = true
+shape = SubResource("Rect_wall")
+
+[node name="BossGateRight" type="StaticBody2D" parent="World"]
+visible = false
+position = Vector2(780, -400)
+collision_mask = 0
+
+[node name="Visual" type="Sprite2D" parent="World/BossGateRight"]
+z_index = 4
+position = Vector2(-100, -440)
+scale = Vector2(2, 2)
+texture = ExtResource("t_edge")
+centered = false
+flip_h = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/BossGateRight"]
+disabled = true
+shape = SubResource("Rect_wall")
+
 [node name="Foreground" type="Node2D" parent="World" unique_id=437937184]
 modulate = Color(0.55, 0.6, 0.6, 1)
 z_index = 8
@@ -248,3 +284,7 @@ expand_mode = 1
 stream = ExtResource("a_music")
 volume_db = -15.0
 autoplay = true
+
+[node name="BossMusic" type="AudioStreamPlayer" parent="Audio"]
+stream = ExtResource("a_boss_music")
+volume_db = -13.0

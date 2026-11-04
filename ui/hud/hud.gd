@@ -14,6 +14,7 @@ extends CanvasLayer
 @onready var boss_bar: Control = $Root/BossBar
 @onready var boss_fill: ColorRect = $Root/BossBar/Fill
 @onready var boss_lag: ColorRect = $Root/BossBar/Lag
+@onready var boss_name: Label = $Root/BossBar/Name
 
 var _hp_width: float
 var _ult_width: float
@@ -44,8 +45,10 @@ func set_tally(count: int, need: int) -> void:
 	tally.text = "WATCHERS  %d / %d" % [count, need]
 
 
-## 보스 체력 바를 띄운다 — 아래에서 떠오르며 차오른다.
-func show_boss(health: HealthComponent) -> void:
+## 보스 체력 바를 띄운다 — 아래에서 떠오르며 차오른다. title을 주면 바 위의 이름을 바꾼다.
+func show_boss(health: HealthComponent, title: String = "") -> void:
+	if not title.is_empty():
+		boss_name.text = title
 	_boss_health = health
 	health.damaged.connect(_on_boss_damaged)
 	boss_bar.visible = true
