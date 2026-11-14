@@ -9,8 +9,8 @@
 [ext_resource type="PackedScene" uid="uid://2i4ms7pmj5mi" path="res://actors/enemies/giant/giant.tscn" id="5_giant"]
 [ext_resource type="PackedScene" uid="uid://c7nqgrb65tuyi" path="res://actors/enemies/infantry/infantry.tscn" id="5_infantry"]
 [ext_resource type="PackedScene" path="res://actors/enemies/prince/prince.tscn" id="5_prince"]
+[ext_resource type="AudioStream" uid="uid://6ifx5wlm7gbk" path="res://assets/temporary/audio/boss_music_loop.wav" id="a_boss_music"]
 [ext_resource type="AudioStream" uid="uid://bxcfly0xthxyk" path="res://assets/temporary/audio/music_loop.wav" id="a_music"]
-[ext_resource type="AudioStream" path="res://assets/temporary/audio/boss_music_loop.wav" id="a_boss_music"]
 [ext_resource type="Texture2D" uid="uid://dlw0ev4shwoir" path="res://assets/temporary/environment/forest_edge.png" id="t_edge"]
 [ext_resource type="Texture2D" uid="uid://cna7d5j1rfuel" path="res://assets/temporary/environment/forest_far.png" id="t_far"]
 [ext_resource type="Texture2D" uid="uid://c6w1sr44o08ir" path="res://assets/temporary/environment/forest_fern.png" id="t_fern"]
@@ -166,28 +166,28 @@ flip_h = true
 [node name="CollisionShape2D" type="CollisionShape2D" parent="World/RightWall" unique_id=749950530]
 shape = SubResource("Rect_wall")
 
-[node name="BossGateLeft" type="StaticBody2D" parent="World"]
+[node name="BossGateLeft" type="StaticBody2D" parent="World" unique_id=555094975]
 visible = false
 position = Vector2(-780, -400)
 collision_mask = 0
 
-[node name="Visual" type="Sprite2D" parent="World/BossGateLeft"]
+[node name="Visual" type="Sprite2D" parent="World/BossGateLeft" unique_id=1451263499]
 z_index = 4
 position = Vector2(-140, -440)
 scale = Vector2(2, 2)
 texture = ExtResource("t_edge")
 centered = false
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="World/BossGateLeft"]
-disabled = true
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/BossGateLeft" unique_id=380582488]
 shape = SubResource("Rect_wall")
+disabled = true
 
-[node name="BossGateRight" type="StaticBody2D" parent="World"]
+[node name="BossGateRight" type="StaticBody2D" parent="World" unique_id=982039691]
 visible = false
 position = Vector2(780, -400)
 collision_mask = 0
 
-[node name="Visual" type="Sprite2D" parent="World/BossGateRight"]
+[node name="Visual" type="Sprite2D" parent="World/BossGateRight" unique_id=657129474]
 z_index = 4
 position = Vector2(-100, -440)
 scale = Vector2(2, 2)
@@ -195,9 +195,9 @@ texture = ExtResource("t_edge")
 centered = false
 flip_h = true
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="World/BossGateRight"]
-disabled = true
+[node name="CollisionShape2D" type="CollisionShape2D" parent="World/BossGateRight" unique_id=1081968754]
 shape = SubResource("Rect_wall")
+disabled = true
 
 [node name="Foreground" type="Node2D" parent="World" unique_id=437937184]
 modulate = Color(0.55, 0.6, 0.6, 1)
@@ -285,6 +285,6 @@ stream = ExtResource("a_music")
 volume_db = -15.0
 autoplay = true
 
-[node name="BossMusic" type="AudioStreamPlayer" parent="Audio"]
+[node name="BossMusic" type="AudioStreamPlayer" parent="Audio" unique_id=1698868423]
 stream = ExtResource("a_boss_music")
 volume_db = -13.0
