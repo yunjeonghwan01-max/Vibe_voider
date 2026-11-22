@@ -120,9 +120,6 @@ const EVENT_END_PARRY_LOCK := 0.25
 @export var dash_slash_max_path: float = 360.0  # 대시로 지나온 길을 베는 최대 거리
 @export var dash_slash_path_margin: float = 40.0 # 베는 동안 앞으로 파고드는 만큼 뒤쪽 판정을 넉넉히
 
-@export_group("Lightning")
-@export var lightning_recovery: float = 0.2      # 번개가 꽂힌 뒤에도 이만큼 이동 불가 (도달 전에는 공중이면 떠 있다)
-
 @export_group("Rising Slash")
 @export var rising_windup: float = 0.5           # 자세를 낮추고 모으는 시간 (이동 불가, 공중이면 떠 있다)
 @export var rising_launch_velocity: float = -1000.0
@@ -242,7 +239,6 @@ var _skill_fired: bool = false
 var _dash_slash_queued: bool = false   # 대시 중 E 입력 → 대시가 끝나면 대시 참격
 var _dash_slash_window: float = 0.0    # 대시 직후 대시 참격 유예 시간 (남은 초)
 var _dash_start_pos: Vector2 = Vector2.ZERO   # 마지막 대시를 시작한 곳 — 대시 참격이 지나온 길까지 벤다
-var _lightning_struck: bool = false
 var _rising_up: bool = false          # 승천 참격으로 튀어 오르는 중 (적 몸에 부딪히면 떨어진다)
 var _spin_phase: int = SpinPhase.WINDUP
 var _spin_start: Vector2 = Vector2.ZERO
@@ -780,39 +776,35 @@ func _on_skill_ready() -> void:
 
 
 # ─────────────────────────── 스킬: 벼락 ───────────────────────────
-## 시전하면 그 자리에 굳는다(이동 불가). 공중이면 번개가 도달할 때까지 떠 있고, 도달 후 lightning_recovery만큼 더 굳는다.
+## 자세 타이밍(체공·도달·굳는 시간)은 Combat/Lightning이 정한다. 여기서는 몸 표현과 끝내기만 한다.
 func _start_lightning() -> void:
 	action = Action.LIGHTNING
-	_action_time = 0.0
-	_lightning_struck = false
-	velocity.x = 0.0
-	if not is_on_floor():
-		velocity.y = 0.0
 	_squash = Vector2(0.85, 1.18)
 	_set_flash(Color(0.7, 0.5, 1.0), 0.5)
 	visual.play(&"cast_up")
-	lightning.cast(self)
+	lightning.start_pose(self)
 
 
 func _process_lightning(delta: float) -> void:
-	_action_time += delta
-	velocity.x = 0.0
-	var arrived := _action_time >= lightning.travel_time
-	if not arrived:
-		velocity.y = 0.0               # 번개가 닿을 때까지 공중에 떠 있다
-		return
-	if not _lightning_struck:
-		_lightning_struck = true
+	if lightning.update_pose(self, delta):
+		# 번개가 꽂힌 순간: 몸이 눌리며 번쩍인다
 		_squash = Vector2(1.3, 0.75)
 		_set_flash(Color(0.92, 0.82, 1.0), 1.0)
+	if not lightning.has_struck():
+		return
 	_apply_gravity(delta)
 	# 번개가 꽂힌 뒤에는 반격으로만 끊을 수 있다 (이동은 여전히 불가)
 	if Input.is_action_just_pressed("player_parry") and _parry_cd <= 0.0:
 		_start_parry()
 		return
-	if _action_time >= lightning.travel_time + lightning_recovery:
+	if lightning.is_pose_over():
 		action = Action.NONE
 		visual.play(&"locomotion")
+
+
+## 벼락과 승천 참격이 함께 쓰는 명중 처리.
+func _on_lightning_hit(_hurt: HurtboxComponent) -> void:
+	_add_ultimate(ult_charge_on_hit)
 
 
 # ─────────────────────────── 스킬: 승천 참격 ───────────────────────────
@@ -850,10 +842,6 @@ func _process_rising_slash(delta: float) -> void:
 	velocity = Vector2(0.0, rising_launch_velocity)
 	_rising_up = true
 	action = Action.NONE
-
-
-func _on_lightning_hit(_hurt: HurtboxComponent) -> void:
-	_add_ultimate(ult_charge_on_hit)
 
 
 # ─────────────────────────── 스킬: 회전 상승 ───────────────────────────

@@ -108,7 +108,7 @@ _physics_process(delta)                           ← 물리 프레임 (time_sca
 | 반격 | `_parry_cd`, `_parry_success`, `_counter_buffered` | 반격 (+방어·이벤트 잠금이 `_parry_cd` 씀) |
 | 연쇄 | `_chain_t`, `_chain_armed`, `_chain_skip_press`, `_chain_count` | 연쇄 (+사운드 음높이가 `_chain_count` 읽음) |
 | 방어 | `_guard_pose_t`, `_guard_hop` | 방어 (+`_apply_gravity`가 `_guard_hop` 읽음) |
-| 스킬별 | `_skill_fired`, `_dash_slash_queued`, `_dash_slash_window`, `_lightning_struck`, `_rising_up`, `_spin_phase`, `_spin_start`, `_spin_ticks_hit`, `_dive_phase`, `_dive_start_y`, `_dive_tilt` | 각 스킬 (+`_rising_up`은 중력·접촉 피격이 읽음) |
+| 스킬별 | `_skill_fired`, `_dash_slash_queued`, `_dash_slash_window`, `_rising_up`, `_spin_phase`, `_spin_start`, `_spin_ticks_hit`, `_dive_phase`, `_dive_start_y`, `_dive_tilt` | 각 스킬 (+`_rising_up`은 중력·접촉 피격이 읽음) |
 | 궁극기 | `ult_charge` (공개) | 궁극기 (+HUD가 직접 읽음) |
 | 피격·표시 | `_iframe_t`, `_squash`, `_flash_amount`, `_flash_color`, `_spawn_position` | 표시/피격 |
 

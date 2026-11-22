@@ -309,7 +309,7 @@ Enemy (CharacterBody2D)  actors/enemies/enemy.gd (base) → grunt/, duelist/, wa
   - `dive_ability.gd`: 급강하 중 몸 접촉 `Hitbox`(경로의 적마다 1회, `body_damage` 임시 10). `land()`가 떨어진 높이(시작 → 착지, `bonus_height` 450까지 직선)로 작렬+불꽃 합계 35~55를 정하고 7:3으로 나눠 `DiveBlast`와 공용 `GroundImpact` 균열을 스폰한다.
   - `dive_blast.gd/.tscn`: 착지 지점 양옆 `blast_half_width`(150) × 높이 150 판정. 작렬(겹친 적 전부, 바깥·위 넉백) → 바닥에서 불씨 예고 → `flame_delay`(0.35초) 뒤 범위 전체에서 불꽃이 한꺼번에 솟아 그때 겹친 적 전부 피해(작렬을 안 맞은 적도).
 - 세 번째 스킬 **벼락**(`lightning/`): 위(W/↑)를 누른 채 E. 쿨다운 2초 (쿨다운 중이면 아무것도 나가지 않는다 — 장풍으로 새지 않게).
-  - `lightning_ability.gd` (`Combat/Lightning`): 쿨다운·번개 스폰. 시전 자세는 `player.gd`의 `Action.LIGHTNING`: 이동 불가, 공중이면 `travel_time`(0.15초) 동안 떠 있다가 도달 후 `lightning_recovery`만큼 더 굳는다(반격으로만 끊김).
+  - `lightning_ability.gd` (`Combat/Lightning`): 쿨다운·번개 스폰·시전 자세 타이밍(`start_pose`/`update_pose`): 이동 불가, 공중이면 `travel_time`(0.15초) 동안 떠 있다가 도달 후 `recovery`(0.2초)만큼 더 굳는다. `player.gd`의 `Action.LIGHTNING`은 몸 표현과 반격 캔슬(도달 후에만)·종료만 맡는다.
   - `lightning_bolt.gd/.tscn` (Attack 프리셋, Effects 컨테이너): 전조 → 도달 시 Hitbox on. 판정 = 하늘→도달점 기둥(`Hitbox/Path`) + 도달점 원(`Hitbox/Area`, r120), 적마다 1회 20 데미지(평타 2배), 바깥으로 넉백 + 맞은 적마다 약한 흔들림. 판정은 한 번이지만 번개는 `linger_time`(0.75초) 동안 남아 `PULSES`대로 몇 번 더 내리치듯 맥동하고, 갈래 번개가 자라며 도달점에서 전기 줄기가 위쪽·바닥을 따라 퍼진다. 번개 모양은 실제 시간으로 계속 다시 그려 hit-stop 중에도 요동친다.
 - 스킬 입력 우선순위 정리: 궁극기 > 반격 > 대시 중/동시/직후 유예 시간의 E → 대시 슬롯 (방향키를 누르고 있어도) > 아래+E → 아래 슬롯 > 위+E → 위 슬롯 > E → 기본 슬롯.
 
