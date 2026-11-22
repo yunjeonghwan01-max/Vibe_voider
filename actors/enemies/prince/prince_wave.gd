@@ -7,9 +7,10 @@ extends WatcherNeedle
 ## 추적·복수탄 없음. 수치는 스폰하는 왕자가 add_child 전에 채운다 (prince_tuning.cfg) — 이 씬에는 수치 파일이 없다.
 
 const HALF_HEIGHT := 30.0
+const DRAW_SCALE := 1.6         # 그림 크기 — 씬의 Hitbox(70x76)와 맞춘다
 
-var accel: float = 1400.0
-var max_speed: float = 1150.0
+var accel: float = 700.0
+var max_speed: float = 720.0
 
 
 func _physics_process(delta: float) -> void:
@@ -18,6 +19,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _draw() -> void:
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE * DRAW_SCALE)
 	var k := clampf(speed / maxf(max_speed, 1.0), 0.0, 1.0)
 	var tail := -40.0 - 90.0 * k
 	# 뒤로 끌리는 초록 잔광

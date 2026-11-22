@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" path="res://combat/effects/spark/spark.tscn" id="3_spark"]
 
 [sub_resource type="RectangleShape2D" id="Rect_hit"]
-size = Vector2(44, 56)
+size = Vector2(70, 76)
 
 [sub_resource type="CircleShape2D" id="Circ_wall"]
 radius = 4.0
@@ -29,5 +29,5 @@ collision_layer = 0
 collision_mask = 1
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Collision"]
-position = Vector2(20, 0)
+position = Vector2(34, 0)
 shape = SubResource("Circ_wall")

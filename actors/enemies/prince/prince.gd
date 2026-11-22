@@ -108,13 +108,13 @@ const QUAKE_STATES := [Atk.QUAKE_BLINK, Atk.QUAKE_CHARGE, Atk.QUAKE_FLASH1, Atk.
 @export var wave_windup: float = 0.6
 @export var wave_cast_time: float = 0.16
 @export var wave_recover: float = 0.6
-@export var wave_height: float = 30.0         # 투사체 중심의 지면 위 높이
-@export var wave_start_speed: float = 260.0
-@export var wave_accel: float = 1400.0
-@export var wave_max_speed: float = 1150.0
+@export var wave_height: float = 42.0         # 투사체 중심의 지면 위 높이
+@export var wave_start_speed: float = 180.0
+@export var wave_accel: float = 700.0
+@export var wave_max_speed: float = 720.0
 @export var wave_damage: int = 12
 @export var wave_knockback: float = 300.0
-@export var wave_deflect_range: float = 170.0
+@export var wave_deflect_range: float = 140.0
 @export var wave_lifetime: float = 3.5
 
 @export_group("Quake")
