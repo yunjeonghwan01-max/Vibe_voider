@@ -12,11 +12,17 @@ var _tint: Color = Color(0.7, 0.5, 1.0, 1.0)
 
 ## add_child 이후 호출해야 global_transform이 적용된다.
 ## global_transform에 이미 Visual의 좌우 반전이 들어 있으므로 flip은 따로 건드리지 않는다.
-func setup_from_sprite(src: Sprite2D, tint: Color = Color(0.7, 0.5, 1.0, 1.0)) -> void:
-	texture = src.texture
-	hframes = src.hframes
-	vframes = src.vframes
-	frame = src.frame
+## src는 Sprite2D 또는 AnimatedSprite2D(현재 애니메이션 프레임을 복사).
+func setup_from_sprite(src: Node2D, tint: Color = Color(0.7, 0.5, 1.0, 1.0)) -> void:
+	if src is AnimatedSprite2D:
+		var anim_src := src as AnimatedSprite2D
+		texture = anim_src.sprite_frames.get_frame_texture(anim_src.animation, anim_src.frame)
+	else:
+		var sprite_src := src as Sprite2D
+		texture = sprite_src.texture
+		hframes = sprite_src.hframes
+		vframes = sprite_src.vframes
+		frame = sprite_src.frame
 	centered = src.centered
 	offset = src.offset
 	flip_h = src.flip_h

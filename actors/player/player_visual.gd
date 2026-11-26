@@ -1,7 +1,7 @@
 class_name PlayerVisual
 extends Node2D
 
-## 플레이어 외형 애니메이션 — 몸통(시트 프레임)과 검(따로 회전하는 파츠)을 움직인다.
+## 플레이어 외형 애니메이션 — 몸통(AnimatedSprite2D, player_frames.tres)과 검(따로 회전하는 파츠)을 움직인다.
 ## Visual 노드 자체의 좌우 반전/스쿼시/기울임은 Player가 맡고, 여기서는 자식 파츠만 다룬다.
 ## Player가 상태가 바뀔 때 play()를 부르고, 매 물리 프레임 tick()을 부른다.
 ## 번쩍임(피격/패링)은 Visual의 hit_flash 머티리얼로 칠한다 (자식은 use_parent_material).
@@ -9,6 +9,18 @@ extends Node2D
 signal footstep
 
 enum Frame { IDLE, RUN1, RUN2, RUN3, RUN4, JUMP, FALL, HURT, DASH }
+
+## 자세(Frame) → player_frames.tres의 애니메이션 이름. 아직 없는 애니메이션은 idle로 대신한다.
+const FRAME_ANIM: Array[StringName] = [&"idle", &"run", &"run", &"run", &"run", &"jump", &"fall", &"hurt", &"dash"]
+
+## 애니메이션별 그림 정보 (64×64 칸의 픽셀 좌표). 새 애니메이션을 넣으면 여기에도 한 줄 추가한다.
+## flip: 그림이 왼쪽을 보고 그려졌으면 true (게임에서는 항상 오른쪽이 정면).
+## foot: 발 중심 — 바닥(BodyCollision 아래쪽)에 닿는 점. hand: 검을 쥔 손 — Sword가 여기 붙는다.
+const ART := {
+	&"idle": {"flip": true, "foot": Vector2(28, 62), "hand": Vector2(30, 41)},
+	&"run": {"flip": false, "foot": Vector2(42, 61), "hand": Vector2(34, 43)},
+}
+const ART_FRAME_SIZE := 64.0
 
 ## 검 각도 키프레임 [시간(초), 각도(도)] — 0° = 정면, +는 아래로. 구간마다 ease-out으로 잇는다.
 const KEYS := {
@@ -36,13 +48,19 @@ const KEYS := {
 	&"dead": [[0.0, 90.0], [0.3, 115.0]],
 }
 
-@onready var body: Sprite2D = $Body
+@onready var body: AnimatedSprite2D = $Body
 @onready var sword: Sprite2D = $Sword
 
 var anim: StringName = &"locomotion"
 var _t: float = 0.0
 var _run_cycle: float = 0.0
 var _sword_deg: float = 22.0
+var _body_scale: Vector2
+
+
+func _ready() -> void:
+	_body_scale = body.scale
+	_apply_art(body.animation)
 
 
 func play(anim_name: StringName) -> void:
@@ -146,8 +164,26 @@ func tick(delta: float, vel: Vector2, on_floor: bool, run_speed: float) -> void:
 	else:
 		_sword_deg = lerpf(_sword_deg, target, 1.0 - exp(-18.0 * delta))
 	sword.rotation_degrees = _sword_deg
-	body.frame = frame_i
-	body.scale = Vector2(2.0 - breath, 2.0 + breath * 2.0)
+	var want := FRAME_ANIM[frame_i]
+	if not body.sprite_frames.has_animation(want):
+		want = &"idle"
+	if body.animation != want:
+		body.play(want)
+		_apply_art(want)
+	body.scale = _body_scale * Vector2(1.0 - breath * 0.5, 1.0 + breath)
+
+
+## 그림의 방향을 맞추고, 발이 Body 원점에 오게 하고, 검을 손에 붙인다.
+func _apply_art(anim_name: StringName) -> void:
+	var art: Dictionary = ART.get(anim_name, ART[&"idle"])
+	var foot: Vector2 = art["foot"]
+	var hand: Vector2 = art["hand"]
+	body.flip_h = art["flip"]
+	if body.flip_h:
+		foot.x = ART_FRAME_SIZE - foot.x
+		hand.x = ART_FRAME_SIZE - hand.x
+	body.offset = -foot
+	sword.position = body.position + (hand - foot) * _body_scale
 
 
 func _keyed(keys: Array, t: float) -> float:

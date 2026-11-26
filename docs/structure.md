@@ -228,7 +228,7 @@ Main (Node)                                   app/main.tscn   (run/main_scene)
 
 Player (CharacterBody2D)                       actors/player/player.gd
 ├── Visual (Node2D, player_visual.gd)          좌우 반전/스쿼시는 Visual에서만. hit_flash 머티리얼
-│   ├── Body (Sprite2D, 9프레임 시트)           idle/run×4/jump/fall/hurt/dash
+│   ├── Body (AnimatedSprite2D)                player_frames.tres: idle/run (jump/fall/hurt/dash는 추가 예정, 없으면 idle). 방향·발·손 위치는 player_visual.gd의 ART 표
 │   └── Sword (Sprite2D)                       따로 회전하는 검 — 콤보/반격/대시/궁극기 자세
 ├── BodyCollision (CollisionShape2D)
 ├── Trail (Line2D, top_level)                  대시/궁극기 잔광

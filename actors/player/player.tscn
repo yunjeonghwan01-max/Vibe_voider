@@ -1,7 +1,6 @@
 [gd_scene format=3 uid="uid://cfpo0llem30uy"]
 
 [ext_resource type="Script" uid="uid://bbdf5xctq8ra0" path="res://actors/player/player.gd" id="1_player"]
-[ext_resource type="Texture2D" uid="uid://cxm2xjvpib4x4" path="res://assets/temporary/characters/player/player_body.png" id="2_body"]
 [ext_resource type="Shader" uid="uid://dfxp8e0ye6t5m" path="res://combat/effects/hit_flash/hit_flash.gdshader" id="2_flash"]
 [ext_resource type="Texture2D" uid="uid://gr4soy27j8d6" path="res://assets/temporary/characters/player/player_sword.png" id="2_sword"]
 [ext_resource type="Script" uid="uid://ccdjsdaja3kky" path="res://actors/player/player_visual.gd" id="2_visual"]
@@ -12,21 +11,22 @@
 [ext_resource type="PackedScene" uid="uid://cgygv5hooem53" path="res://combat/effects/spark/spark.tscn" id="7_spark"]
 [ext_resource type="PackedScene" uid="uid://dikf12agie0xw" path="res://combat/effects/afterimage/afterimage.tscn" id="8_after"]
 [ext_resource type="Script" uid="uid://xnxfe1b03y28" path="res://actors/player/abilities/void_orb/void_orb_ability.gd" id="9_orb_ability"]
-[ext_resource type="PackedScene" path="res://actors/player/abilities/void_orb/void_orb_projectile.tscn" id="10_orb_proj"]
+[ext_resource type="PackedScene" uid="uid://devo5ottepqj7" path="res://actors/player/abilities/void_orb/void_orb_projectile.tscn" id="10_orb_proj"]
 [ext_resource type="Script" uid="uid://ddhui8cfgt60e" path="res://actors/player/abilities/dash_slash/dash_slash_ability.gd" id="11_ds_ability"]
+[ext_resource type="SpriteFrames" path="res://actors/player/player_frames.tres" id="11_frames"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/dash_slash/dash_slash_effect.tscn" id="12_ds_fx"]
 [ext_resource type="PackedScene" path="res://combat/attacks/x_slash/x_slash.tscn" id="13_counter"]
 [ext_resource type="Script" uid="uid://c38qqiperccge" path="res://actors/player/abilities/lightning/lightning_ability.gd" id="14_lightning"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/lightning/lightning_bolt.tscn" id="15_bolt"]
-[ext_resource type="Script" path="res://actors/player/abilities/rising_slash/rising_slash_ability.gd" id="18_rising"]
-[ext_resource type="Script" path="res://actors/player/abilities/spin_rise/spin_rise_ability.gd" id="19_spin"]
-[ext_resource type="Script" path="res://actors/player/abilities/spin_rise/spin_rise_effect.gd" id="20_spin_fx"]
-[ext_resource type="Script" path="res://actors/player/abilities/dive/dive_ability.gd" id="21_dive"]
+[ext_resource type="PackedScene" path="res://actors/player/abilities/haki/haki_burst.tscn" id="16_haki"]
+[ext_resource type="PackedScene" path="res://actors/player/abilities/moon_slash/moon_slash.tscn" id="17_moon"]
+[ext_resource type="Script" uid="uid://cmd0jnrku6arj" path="res://actors/player/abilities/rising_slash/rising_slash_ability.gd" id="18_rising"]
+[ext_resource type="Script" uid="uid://c4fk5uifnd5i2" path="res://actors/player/abilities/spin_rise/spin_rise_ability.gd" id="19_spin"]
+[ext_resource type="Script" uid="uid://didmrfrlh6pp1" path="res://actors/player/abilities/spin_rise/spin_rise_effect.gd" id="20_spin_fx"]
+[ext_resource type="Script" uid="uid://vuaa04vqfhhh" path="res://actors/player/abilities/dive/dive_ability.gd" id="21_dive"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/dive/dive_blast.tscn" id="22_dive_blast"]
 [ext_resource type="PackedScene" path="res://combat/effects/ground_impact/ground_impact.tscn" id="23_impact"]
 [ext_resource type="PackedScene" path="res://actors/player/abilities/sword_wave/sword_wave.tscn" id="24_wave"]
-[ext_resource type="PackedScene" path="res://actors/player/abilities/haki/haki_burst.tscn" id="16_haki"]
-[ext_resource type="PackedScene" path="res://actors/player/abilities/moon_slash/moon_slash.tscn" id="17_moon"]
 [ext_resource type="AudioStream" uid="uid://cnlltvsiboews" path="res://assets/temporary/audio/dash.wav" id="a_dash"]
 [ext_resource type="AudioStream" uid="uid://dcixlbk3lyuvs" path="res://assets/temporary/audio/dash_slash.wav" id="a_dash_slash"]
 [ext_resource type="AudioStream" uid="uid://f51u2c8am6r2" path="res://assets/temporary/audio/player_death.wav" id="a_death"]
@@ -66,6 +66,9 @@ radius = 36.0
 [sub_resource type="CircleShape2D" id="Circ_parry"]
 radius = 72.0
 
+[sub_resource type="RectangleShape2D" id="Rect_dash_slash"]
+size = Vector2(260, 50)
+
 [sub_resource type="CircleShape2D" id="Circ_rising"]
 radius = 120.0
 
@@ -78,37 +81,36 @@ size = Vector2(76, 112)
 [sub_resource type="RectangleShape2D" id="Rect_dive_body"]
 size = Vector2(48, 70)
 
-[sub_resource type="RectangleShape2D" id="Rect_dash_slash"]
-size = Vector2(260, 50)
-
 [node name="Player" type="CharacterBody2D" unique_id=589987289]
 z_index = 2
 collision_layer = 2
 script = ExtResource("1_player")
+moon_slash_scene = ExtResource("17_moon")
+sword_wave_scene = ExtResource("24_wave")
 slash_scene = ExtResource("6_slash")
 spark_scene = ExtResource("7_spark")
 afterimage_scene = ExtResource("8_after")
 counter_slash_scene = ExtResource("13_counter")
 haki_scene = ExtResource("16_haki")
-moon_slash_scene = ExtResource("17_moon")
-sword_wave_scene = ExtResource("24_wave")
 
 [node name="Visual" type="Node2D" parent="." unique_id=1009679064]
 material = SubResource("Mat_flash")
 script = ExtResource("2_visual")
 
-[node name="Body" type="Sprite2D" parent="Visual" unique_id=512140028]
+[node name="Body" type="AnimatedSprite2D" parent="Visual" unique_id=1392111669]
 use_parent_material = true
 position = Vector2(0, 27)
-scale = Vector2(2, 2)
-texture = ExtResource("2_body")
+scale = Vector2(1.5, 1.5)
+sprite_frames = ExtResource("11_frames")
+animation = &"idle"
+autoplay = "idle"
 centered = false
-offset = Vector2(-20, -41)
-hframes = 9
+offset = Vector2(-36, -62)
+flip_h = true
 
 [node name="Sword" type="Sprite2D" parent="Visual" unique_id=918879436]
 use_parent_material = true
-position = Vector2(13, 12)
+position = Vector2(-3, -4.5)
 rotation = 0.38
 scale = Vector2(2, 2)
 texture = ExtResource("2_sword")
@@ -186,24 +188,24 @@ shape = SubResource("Rect_dash_slash")
 script = ExtResource("14_lightning")
 bolt_scene = ExtResource("15_bolt")
 
-[node name="RisingSlash" type="Node2D" parent="Combat"]
+[node name="RisingSlash" type="Node2D" parent="Combat" unique_id=429498291]
 z_index = 1
 script = ExtResource("18_rising")
 
-[node name="Hitbox" type="Area2D" parent="Combat/RisingSlash"]
+[node name="Hitbox" type="Area2D" parent="Combat/RisingSlash" unique_id=479858980]
 position = Vector2(0, -8)
 collision_layer = 32
 collision_mask = 16
 monitoring = false
 script = ExtResource("5_hit")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/RisingSlash/Hitbox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/RisingSlash/Hitbox" unique_id=1023497314]
 shape = SubResource("Circ_rising")
 
-[node name="SpinRise" type="Node2D" parent="Combat"]
+[node name="SpinRise" type="Node2D" parent="Combat" unique_id=372465408]
 script = ExtResource("19_spin")
 
-[node name="Hitbox" type="Area2D" parent="Combat/SpinRise"]
+[node name="Hitbox" type="Area2D" parent="Combat/SpinRise" unique_id=675369550]
 position = Vector2(0, -42)
 collision_layer = 32
 collision_mask = 16
@@ -211,38 +213,39 @@ monitoring = false
 script = ExtResource("5_hit")
 apply_on_contact = false
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/SpinRise/Hitbox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/SpinRise/Hitbox" unique_id=196484036]
 shape = SubResource("Rect_spin_hit")
 
-[node name="Sensor" type="Area2D" parent="Combat/SpinRise"]
+[node name="Sensor" type="Area2D" parent="Combat/SpinRise" unique_id=1993833030]
 position = Vector2(0, -30)
 collision_layer = 0
 collision_mask = 4
 monitoring = false
 monitorable = false
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/SpinRise/Sensor"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/SpinRise/Sensor" unique_id=1377377697]
 shape = SubResource("Rect_spin_sensor")
 
-[node name="Effect" type="Node2D" parent="Combat/SpinRise"]
+[node name="Effect" type="Node2D" parent="Combat/SpinRise" unique_id=273341264]
 z_index = 1
 script = ExtResource("20_spin_fx")
 
-[node name="Dive" type="Node2D" parent="Combat"]
+[node name="Dive" type="Node2D" parent="Combat" unique_id=1499491000]
 script = ExtResource("21_dive")
 blast_scene = ExtResource("22_dive_blast")
 impact_scene = ExtResource("23_impact")
 
-[node name="Hitbox" type="Area2D" parent="Combat/Dive"]
+[node name="Hitbox" type="Area2D" parent="Combat/Dive" unique_id=946532365]
 collision_layer = 32
 collision_mask = 16
 monitoring = false
 script = ExtResource("5_hit")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/Dive/Hitbox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Combat/Dive/Hitbox" unique_id=1458348920]
 shape = SubResource("Rect_dive_body")
 
 [node name="Audio" type="Node2D" parent="." unique_id=1525423985]
+visible = false
 
 [node name="Swing1" type="AudioStreamPlayer2D" parent="Audio" unique_id=1688203788]
 stream = ExtResource("a_swing1")
