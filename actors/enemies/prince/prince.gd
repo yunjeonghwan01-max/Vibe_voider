@@ -6,12 +6,13 @@ extends Enemy
 ## 체력은 PrinceHealth.floor_hp에서 멈추므로 큰 피해로 패턴 4·5를 건너뛸 수 없다. 패턴 4·5 동안은 피해 무효.
 ##
 ## 패턴 1 근접 검격 (가장 자주): 순보 접근 → 양손으로 치켜듦(RAISE) → FLASH(MCI) → 내려베기.
+##   RAISE/RERAISE/FLASH 동안 플레이어가 등 뒤로 넘어가면 바로 돌아서고, 내려벨 때 멀어진 만큼 파고든다(_track_target, _begin_strike).
 ##   반격당하면 on_parried()에서 후속 여부를 굴린다. 기존 일반 경직이나 CC/CCI 랠리가 아니다:
 ##   · 후속 있음: 튕겨 나가며 버티는 자세(RECOIL, 초록 번쩍임) → 다시 치켜듦(RERAISE) → 새 FLASH → 새 내려베기.
 ##     RECOIL + RERAISE가 연쇄 예약 창(0.2초)보다 훨씬 길어서 플레이어가 새 FLASH를 보고 따로 눌러야 한다.
 ##   · 후속 없음: 곧바로 무릎이 꺾이며(BROKEN) 청록빛 경직 — 분명히 끝났고 지금이 공격 기회다.
 ## 패턴 2 횡단 돌진: 맵 끝으로 순간이동 → 웅크림 → 반대편 끝까지 가속 돌진 + 뒤에 남는 아우라(PrinceAura, 약한 피해).
-##   왕자가 아직 멀리 있을 때만 짧은 FLASH가 켜지고(rush_flash_far ~ rush_flash_near) 그때만 방향 무관 반격 가능 → 돌진 중단 + 기절.
+##   플레이어 몸에 닿기 직전(rush_flash_lead초 전 ~ 닿는 순간)에만 짧은 FLASH가 켜지고 그때만 방향 무관 반격 가능 → 돌진 중단 + 기절.
 ##   점프로도 피한다. 대시는 무적이 끝난 뒤 아직 뜨거운 아우라에 맞을 뿐, 대시 무적을 뚫는 규칙은 없다.
 ## 패턴 3 원거리 검격: 검을 바닥으로 그어 지면을 달리는 가속 투사체 PrinceWave 한 발 (PRCI, 기존 튕겨내기 경로).
 ## 패턴 4 천지분쇄 일격 (1회): 맵 중앙 공중에서 3초 충전 → 세 번의 독립된 전역 충격. 각 충격마다 FLASH 동안 반격 키를 누르면
@@ -49,6 +50,7 @@ const STRIKE_END_DEG := 62.0
 const LOW_DEG := 34.0           # 바닥을 그은 끝
 const RECOIL_DEG := -60.0
 const DOWN_DEG := 90.0          # 칼끝이 곧장 아래
+const TRACK_DEADZONE := 12.0    # 패턴 1 추적: 플레이어가 이만큼은 옆으로 벗어나야 돌아선다
 const GREEN := Color(0.45, 1.0, 0.58, 1.0)
 const SHUNPO_RETRIES := 2
 const QUAKE_STATES := [Atk.QUAKE_BLINK, Atk.QUAKE_CHARGE, Atk.QUAKE_FLASH1, Atk.QUAKE_FALL, Atk.QUAKE_GAP2,
@@ -92,9 +94,9 @@ const QUAKE_STATES := [Atk.QUAKE_BLINK, Atk.QUAKE_CHARGE, Atk.QUAKE_FLASH1, Atk.
 @export var rush_recover: float = 0.75
 @export var rush_damage: int = 18
 @export var rush_knockback: float = 420.0
-@export var rush_flash_far: float = 860.0     # FLASH는 왕자와의 거리가 이 안일 때만 켜진다
-@export var rush_flash_near: float = 150.0    # 이보다 가까워지면 FLASH는 꺼진다 (근접 FLASH가 아니다)
-@export var rush_flash_lead: float = 0.62     # 지금 속도로 이 시간 뒤면 닿을 거리에서 켜진다 (어디 서 있든 같은 읽기)
+@export var rush_flash_far: float = 520.0     # 이보다 멀면 FLASH가 켜지지 않는다 (멀리서 받아치는 어색함 방지)
+@export var rush_flash_near: float = 80.0     # 몸이 닿는 거리 — 여기까지 FLASH가 유지된다
+@export var rush_flash_lead: float = 0.22     # 몸이 닿기 이 시간 전에 켜진다 (가속 포함, 어디 서 있든 같은 읽기)
 @export var rush_flash_time: float = 0.26
 @export var rush_stun: float = 2.2
 @export var rush_counter_damage: int = 0      # 돌진 반격 X자 피해 (0 = 기절만)
@@ -278,10 +280,12 @@ func _enemy_ai(delta: float) -> void:
 			_do_shunpo(delta)
 		Atk.RAISE, Atk.RERAISE:
 			_brake(delta)
+			_track_target()
 			if _atk_timer <= 0.0:
 				_begin_flash()
 		Atk.FLASH:
 			_brake(delta)
+			_track_target()
 			if _atk_timer <= 0.0:
 				_begin_strike()
 		Atk.STRIKE:
@@ -400,7 +404,7 @@ func _do_shunpo(delta: float) -> void:
 
 
 func _begin_raise() -> void:
-	facing = dir_to_target()                  # 방향은 여기서 고정 — 치켜든 뒤 등 뒤로 돌아가면 헛벤다
+	facing = dir_to_target()                  # 치켜든 뒤에도 _track_target()이 플레이어 쪽으로 계속 돌아선다
 	_place_attack_hitbox()
 	if _shunpo_followup:
 		_go(Atk.RERAISE, reraise_time / _cast())
@@ -410,6 +414,20 @@ func _begin_raise() -> void:
 	_go(Atk.RAISE, raise_time / _cast())
 	visual.scale = Vector2(0.86 * signf(facing), 1.16)
 	_sfx(sfx_clang, 0.05)
+
+
+## 예고·FLASH 동안 플레이어가 등 뒤로 넘어가면(대시 등) 즉시 돌아선다. 바로 위에 있을 때 떨지 않게 여유를 둔다.
+func _track_target() -> void:
+	var t := get_target()
+	if t == null or absf(t.global_position.x - global_position.x) < TRACK_DEADZONE:
+		return
+	var f := dir_to_target()
+	if f == facing:
+		return
+	facing = f
+	_place_attack_hitbox()
+	if _glint_fx != null and is_instance_valid(_glint_fx):
+		_glint_fx.position.x = -_glint_fx.position.x
 
 
 func _place_attack_hitbox() -> void:
@@ -426,11 +444,15 @@ func _begin_flash() -> void:
 
 
 func _begin_strike() -> void:
+	_track_target()
 	end_glint()
 	_go(Atk.STRIKE, strike_time)
 	visual.scale = Vector2(1.3 * signf(facing), 0.82)
 	if is_on_floor():
-		velocity.x = facing * strike_lunge
+		# 플레이어가 멀어졌으면(대시 등) 더 세게 파고들어 melee_stop 거리까지 따라붙는다 (순보 속도가 상한)
+		var t := get_target()
+		var gap := absf(t.global_position.x - global_position.x) if t != null else 0.0
+		velocity.x = facing * clampf((gap - melee_stop + 15.0) / strike_time, strike_lunge, shunpo_speed)
 	attack_hitbox.reset_hits()
 	_place_attack_hitbox()
 	attack_hitbox.damage = melee_damage[mini(_melee_step, melee_damage.size() - 1)]
@@ -592,7 +614,7 @@ func _do_rush(delta: float) -> void:
 		_finish_rush()
 
 
-## 왕자가 아직 멀리 있는 구간에서만 켜지는 FLASH. 켜져 있는 동안만 is_counter_open()이 true다.
+## 몸이 닿기 직전에만 켜지는 FLASH. 켜져 있는 동안만 is_counter_open()이 true다.
 func _update_rush_flash(delta: float) -> void:
 	var t := get_target()
 	var gap := (t.global_position.x - global_position.x) * _rush_dir if t != null else -1.0
@@ -601,12 +623,18 @@ func _update_rush_flash(delta: float) -> void:
 		if _rush_window <= 0.0 or gap < rush_flash_near:
 			_rush_window = 0.0
 			tell.mode = CounterTell.Mode.OFF
-	elif not _rush_flash_used and gap >= rush_flash_near and gap <= minf(rush_flash_far, _rush_speed * rush_flash_lead):
+	elif not _rush_flash_used and gap >= rush_flash_near and gap <= minf(rush_flash_far, rush_flash_near + _rush_reach(rush_flash_lead)):
 		_rush_flash_used = true
 		_rush_window = rush_flash_time
 		tell.mode = CounterTell.Mode.WINDOW
 		tell.scale = Vector2.ONE * 1.1
 		_sfx(sfx_cue, 0.0)
+
+
+## 지금 속도에서 가속까지 더해 lead초 동안 나아갈 거리 (최고 속도에서 멈춤).
+func _rush_reach(lead: float) -> float:
+	var v_end := minf(_rush_speed + rush_accel * _cast() * lead, rush_max_speed)
+	return (_rush_speed + v_end) * 0.5 * lead
 
 
 func _finish_rush() -> void:
